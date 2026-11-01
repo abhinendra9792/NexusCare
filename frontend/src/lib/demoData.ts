@@ -1,5 +1,4 @@
-import type { ActivityEntry, AppointmentRequest, DashboardStats } from "@/types"
-
+import type { ActivityEntry, AppointmentRequest, CarePlanTask, DashboardStats } from "@/types"
 /**
  * Demo mode shows fictional sample data until the backend is connected.
  * Set VITE_DEMO_MODE=false in frontend/.env to turn it off (Phase 5).
@@ -134,3 +133,46 @@ export const demoStats: DashboardStats = {
     { status: "failed", count: 1 },
   ],
 }
+
+export const demoCarePlanTasks: CarePlanTask[] = [
+  {
+    id: "demo-task-001",
+    description: "Book follow-up appointment in two weeks",
+    sourceReason: "Notes mention a follow-up in two weeks",
+    suggestedDueDate: "2026-11-11",
+    priority: "high",
+    taskStatus: "pending",
+    reviewStatus: "approved",
+    origin: "ai",
+  },
+  {
+    id: "demo-task-002",
+    description: "Remind patient to bring previous reports",
+    sourceReason: "Notes ask for previous reports at the next visit",
+    suggestedDueDate: null,
+    priority: "medium",
+    taskStatus: "pending",
+    reviewStatus: "draft",
+    origin: "ai",
+  },
+  {
+    id: "demo-task-003",
+    description: "Send itemised billing breakdown to family",
+    sourceReason: "Family requested a billing breakdown",
+    suggestedDueDate: null,
+    priority: "low",
+    taskStatus: "completed",
+    reviewStatus: "approved",
+    origin: "ai",
+  },
+  {
+    id: "demo-task-004",
+    description: "Update emergency contact details",
+    sourceReason: null,
+    suggestedDueDate: null,
+    priority: null,
+    taskStatus: "pending",
+    reviewStatus: "draft",
+    origin: "manual",
+  },
+]

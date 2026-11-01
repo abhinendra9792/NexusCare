@@ -41,3 +41,15 @@ export type DashboardStats = {
   pendingTasks: number
   statusBreakdown: StatusCount[]
 }
+export type TaskPriority = "low" | "medium" | "high"
+
+export type CarePlanTask = {
+  id: string
+  description: string
+  sourceReason: string | null
+  suggestedDueDate: string | null
+  priority: TaskPriority | null
+  taskStatus: "pending" | "completed" | "cancelled"
+  reviewStatus: "draft" | "approved" | "rejected"
+  origin: "ai" | "manual"
+}
