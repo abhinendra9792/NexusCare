@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { DEMO_MODE } from "@/lib/demoData"
-import type { ServiceClassificationDraft, VisitSummaryDraft } from "@/types"
+import type { CarePlanTaskChanges, ServiceClassificationDraft, VisitSummaryDraft } from "@/types"
 
 async function refreshAfterSave(queryClient: QueryClient, key: string) {
   await Promise.all([
@@ -100,4 +100,30 @@ export function useUploadDocument() {
     mutationFn: (file: File) => api.uploadDocument(file),
     onSettled: () => refresh(),
   })
+}
+
+// ---------- Care plan review ----------
+
+export function useCarePlanActions() {
+  const refresh = useRefresh("care-plans")
+  const settle = { onSettled: () => refresh() }
+  return {
+    retry: useMutation({ mutationFn: (planId: string) => api.retryCarePlan(planId), ...settle }),
+    cancel: useMutation({ mutationFn: (planId: string) => api.cancelCarePlan(planId), ...settle }),
+    approvePlan: useMutation({ mutationFn: (planId: string) => api.approveCarePlan(planId), ...settle }),
+    rejectPlan: useMutation({ mutationFn: (planId: string) => api.rejectCarePlan(planId), ...settle }),
+    addTask: useMutation({
+      mutationFn: ({ planId, description }: { planId: string; description: string }) =>
+        api.addCarePlanTask(planId, { description }),
+      ...settle,
+    }),
+    updateTask: useMutation({
+      mutationFn: ({ taskId, changes }: { taskId: string; changes: CarePlanTaskChanges }) =>
+        api.updateCarePlanTask(taskId, changes),
+      ...settle,
+    }),
+    deleteTask: useMutation({ mutationFn: (taskId: string) => api.deleteCarePlanTask(taskId), ...settle }),
+    approveTask: useMutation({ mutationFn: (taskId: string) => api.approveCarePlanTask(taskId), ...settle }),
+    rejectTask: useMutation({ mutationFn: (taskId: string) => api.rejectCarePlanTask(taskId), ...settle }),
+  }
 }

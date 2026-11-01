@@ -175,6 +175,22 @@ export const api = {
       timeoutMs: AI_TIMEOUT_MS,
     }),
 
+      cancelCarePlan: (recordId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/${id(recordId)}/cancel`, { method: "POST" }),
+  approveCarePlan: (recordId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/${id(recordId)}/approve`, { method: "POST" }),
+  rejectCarePlan: (recordId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/${id(recordId)}/reject`, { method: "POST" }),
+  addCarePlanTask: (planId: string, input: { description: string }) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/${id(planId)}/tasks`, { method: "POST", body: input }),
+  updateCarePlanTask: (taskId: string, changes: Record<string, unknown>) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/tasks/${id(taskId)}`, { method: "PATCH", body: changes }),
+  deleteCarePlanTask: (taskId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/tasks/${id(taskId)}`, { method: "DELETE" }),
+  approveCarePlanTask: (taskId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/tasks/${id(taskId)}/approve`, { method: "POST" }),
+  rejectCarePlanTask: (taskId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/tasks/${id(taskId)}/reject`, { method: "POST" }),
   // ---------- Documents ----------
   listDocuments: (limit = 50) => apiRequest<ApiDocument[]>(`/api/v1/documents?limit=${limit}`),
   /** Uploads the PDF, extracts text, and runs AI extraction. A failed document must be uploaded again. */

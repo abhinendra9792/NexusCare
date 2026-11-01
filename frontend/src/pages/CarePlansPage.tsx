@@ -1,11 +1,11 @@
-﻿import { ListChecks, ShieldCheck } from "lucide-react"
+﻿import { ShieldCheck } from "lucide-react"
 import { DemoDataBadge } from "@/components/shared/DemoDataBadge"
 import { NoteInputForm } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
-import { RecordListPanel, RecordRow } from "@/components/shared/RecordListPanel"
+import { CarePlanList } from "@/features/care-plans/CarePlanList"
 import { TaskChecklist } from "@/features/care-plans/TaskChecklist"
-import { useCarePlans, useCreateCarePlan } from "@/hooks/useRecords"
+import { useCreateCarePlan } from "@/hooks/useRecords"
 import { DEMO_MODE, demoCarePlanTasks } from "@/lib/demoData"
 
 const rules = [
@@ -16,10 +16,9 @@ const rules = [
 ]
 
 export default function CarePlansPage() {
-  const plansQuery = useCarePlans()
   const createPlan = useCreateCarePlan()
 
-  async function saveDraft(note: string) {
+  async function generateTasks(note: string) {
     await createPlan.mutateAsync({ sourceText: note })
   }
 
@@ -37,9 +36,10 @@ export default function CarePlansPage() {
             label="Progress notes"
             placeholder="e.g. PT-1042 recovering well. Needs a follow-up appointment in two weeks and a reminder to bring previous reports. Family asked for a billing breakdown."
             helpText="Use fictional details only."
-                        submitLabel={DEMO_MODE ? "Generate tasks" : "Generate tasks with AI"}
-            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-            successMessage="AI task drafts ready. Every task is reviewed before it is approved."          />
+            submitLabel={DEMO_MODE ? "Generate tasks" : "Generate tasks with AI"}
+            onSubmitNote={DEMO_MODE ? undefined : generateTasks}
+            successMessage="AI task drafts ready. Review each task below before approving the plan."
+          />
         </Panel>
 
         <Panel title="Review rules">
@@ -62,21 +62,9 @@ export default function CarePlansPage() {
           <TaskChecklist initialTasks={demoCarePlanTasks} />
         </Panel>
       ) : (
-        <RecordListPanel
-          title="Care plans"
-          query={plansQuery}
-          icon={ListChecks}
-          emptyTitle="No care plans yet"
-          emptyDescription="Saved progress notes and their task checklists will appear here."
-          renderItem={(plan) => (
-            <RecordRow
-              text={plan.title ?? plan.sourceText}
-              createdAt={plan.createdAt}
-              status={plan.status}
-              badges={<span>{plan.tasks.length} task(s)</span>}
-            />
-          )}
-        />
+        <Panel title="Care plans">
+          <CarePlanList />
+        </Panel>
       )}
     </div>
   )

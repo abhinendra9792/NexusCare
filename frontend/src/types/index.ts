@@ -190,3 +190,11 @@ export type ServiceClassificationDraft = {
   confidence: Confidence
   possible_emergency: boolean
 }
+
+/** Fields that can be changed on a care-plan task. Send only what changes. */
+export type CarePlanTaskChanges = {
+  description?: string
+  suggestedDueDate?: string | null
+  priority?: TaskPriority | null
+  taskStatus?: CarePlanTask["taskStatus"]
+}
