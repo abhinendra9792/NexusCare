@@ -10,6 +10,7 @@ from app.services.activity_service import log_activity
 from app.services.ai_service import AIError, AIService
 from app.services.status_service import apply_transition
 
+
 def create_record(db: Session, record, *, entity_type: str, label: str, summary: str | None = None):
     record.status = RecordStatus.DRAFT
     db.add(record)
@@ -56,6 +57,7 @@ def cancel_record(db: Session, model, record_id: str, *, entity_type: str, label
     db.refresh(record)
     return record
 
+
 def _store_as_draft(record, result: BaseModel) -> None:
     record.draft_content = result.model_dump(mode="json")
 
@@ -76,7 +78,8 @@ def run_ai_generation(
     """Shared AI flow: processing -> awaiting_review on success, -> failed on error.
 
     apply_result decides where the validated output is stored. By default it goes
-    into draft_content; care plans pass their own function to create task rows.
+    into draft_content; care plans and documents pass their own function to create
+    child rows. It runs after ai_metadata is set, so it may add extra metadata.
     approved_content is never touched here.
     """
     apply_transition(
@@ -110,10 +113,10 @@ def run_ai_generation(
         raise
 
     metadata["prompt_version"] = prompt_version
-    apply_result(record, result)
     record.ai_model = metadata["model"]
     record.ai_metadata = metadata
     record.error_message = None
+    apply_result(record, result)
     apply_transition(
         db,
         record,
