@@ -11,7 +11,8 @@
 
 const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "")
 const DEFAULT_TIMEOUT_MS = 15000
-const UPLOAD_TIMEOUT_MS = 60000
+// AI calls can be slow: the backend waits up to 30s per attempt and retries up to 2 times.
+const AI_TIMEOUT_MS = 120000
 
 export class ApiError extends Error {
   readonly status: number
@@ -86,32 +87,84 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return (await response.json()) as T
 }
 
+const id = (value: string) => encodeURIComponent(value)
+
 export const api = {
   getDashboardStats: () => apiRequest<DashboardStats>("/api/v1/dashboard/stats"),
   listActivity: (limit = 50) => apiRequest<ActivityEntry[]>(`/api/v1/activity?limit=${limit}`),
 
+  // ---------- Appointments ----------
   listAppointments: (limit = 50) => apiRequest<ApiAppointment[]>(`/api/v1/appointments?limit=${limit}`),
+  /** Saves the note and runs AI extraction. Returns a draft awaiting review. */
   createAppointment: (input: CreateAppointmentInput) =>
-    apiRequest<ApiAppointment>("/api/v1/appointments", { method: "POST", body: input }),
-  cancelAppointment: (id: string) =>
-    apiRequest<ApiAppointment>(`/api/v1/appointments/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+    apiRequest<ApiAppointment>("/api/v1/appointments/generate", {
+      method: "POST",
+      body: input,
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
+  retryAppointment: (recordId: string) =>
+    apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}/retry`, {
+      method: "POST",
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
+  cancelAppointment: (recordId: string) =>
+    apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}/cancel`, { method: "POST" }),
 
+  // ---------- Visit summaries ----------
   listVisitSummaries: (limit = 50) => apiRequest<ApiVisitSummary[]>(`/api/v1/visit-summaries?limit=${limit}`),
+  /** Saves the notes and runs AI summarisation. Returns a draft awaiting review. */
   createVisitSummary: (sourceText: string) =>
-    apiRequest<ApiVisitSummary>("/api/v1/visit-summaries", { method: "POST", body: { sourceText } }),
+    apiRequest<ApiVisitSummary>("/api/v1/visit-summaries/generate", {
+      method: "POST",
+      body: { sourceText },
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
+  retryVisitSummary: (recordId: string) =>
+    apiRequest<ApiVisitSummary>(`/api/v1/visit-summaries/${id(recordId)}/retry`, {
+      method: "POST",
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
 
+  // ---------- Service requests ----------
   listServiceRequests: (limit = 50) => apiRequest<ApiServiceRequest[]>(`/api/v1/service-requests?limit=${limit}`),
+  /** Runs the emergency keyword check, saves the inquiry, then runs AI classification. */
   createServiceRequest: (sourceText: string) =>
-    apiRequest<ApiServiceRequest>("/api/v1/service-requests", { method: "POST", body: { sourceText } }),
+    apiRequest<ApiServiceRequest>("/api/v1/service-requests/generate", {
+      method: "POST",
+      body: { sourceText },
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
+  retryServiceRequest: (recordId: string) =>
+    apiRequest<ApiServiceRequest>(`/api/v1/service-requests/${id(recordId)}/retry`, {
+      method: "POST",
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
 
+  // ---------- Care plans ----------
   listCarePlans: (limit = 50) => apiRequest<ApiCarePlan[]>(`/api/v1/care-plans?limit=${limit}`),
+  /** Saves the progress notes and runs AI task generation. Tasks start as drafts. */
   createCarePlan: (input: { sourceText: string; title?: string }) =>
-    apiRequest<ApiCarePlan>("/api/v1/care-plans", { method: "POST", body: input }),
+    apiRequest<ApiCarePlan>("/api/v1/care-plans/generate", {
+      method: "POST",
+      body: input,
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
+  retryCarePlan: (recordId: string) =>
+    apiRequest<ApiCarePlan>(`/api/v1/care-plans/${id(recordId)}/retry`, {
+      method: "POST",
+      timeoutMs: AI_TIMEOUT_MS,
+    }),
 
+  // ---------- Documents ----------
   listDocuments: (limit = 50) => apiRequest<ApiDocument[]>(`/api/v1/documents?limit=${limit}`),
+  /** Uploads the PDF, extracts text, and runs AI extraction. A failed document must be uploaded again. */
   uploadDocument: (file: File) => {
     const form = new FormData()
     form.append("file", file)
-    return apiRequest<ApiDocument>("/api/v1/documents", { method: "POST", body: form, timeoutMs: UPLOAD_TIMEOUT_MS })
+    return apiRequest<ApiDocument>("/api/v1/documents/generate", {
+      method: "POST",
+      body: form,
+      timeoutMs: AI_TIMEOUT_MS,
+    })
   },
 }

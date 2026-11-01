@@ -37,10 +37,9 @@ export default function CarePlansPage() {
             label="Progress notes"
             placeholder="e.g. PT-1042 recovering well. Needs a follow-up appointment in two weeks and a reminder to bring previous reports. Family asked for a billing breakdown."
             helpText="Use fictional details only."
-            submitLabel={DEMO_MODE ? "Generate tasks" : "Save as draft"}
+                        submitLabel={DEMO_MODE ? "Generate tasks" : "Generate tasks with AI"}
             onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-            successMessage="Saved as a draft. AI task generation will be added in Phase 6, and every task is reviewed before it is approved."
-          />
+            successMessage="AI task drafts ready. Every task is reviewed before it is approved."          />
         </Panel>
 
         <Panel title="Review rules">

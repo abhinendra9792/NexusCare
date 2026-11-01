@@ -12,8 +12,7 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition"
 export type NoteSourceType = "text" | "voice"
 
 const DEFAULT_SUCCESS =
-  "Input looks good. AI generation will be connected in Phase 6. Nothing has been sent or saved yet."
-
+  "Demo mode: the input is valid, but nothing was sent or saved. Turn off demo mode to use the real AI."
 type NoteInputFormProps = {
   id: string
   label: string

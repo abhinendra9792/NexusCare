@@ -39,9 +39,9 @@ export default function ServiceRequestsPage() {
             label="Inquiry message"
             placeholder="e.g. I was charged twice for my visit on 12 October. Can someone check my invoice?"
             helpText="Use fictional details only. Staff can correct the suggested department before approving."
-            submitLabel={DEMO_MODE ? "Classify inquiry" : "Save as draft"}
+                        submitLabel={DEMO_MODE ? "Classify inquiry" : "Classify with AI"}
             onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-            successMessage="Saved as a draft. AI classification will be added in Phase 6, and staff approve every routing decision."
+                        successMessage="AI classification ready. It is awaiting review below, and staff approve every routing decision."
             minLength={10}
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />

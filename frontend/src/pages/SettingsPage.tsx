@@ -9,8 +9,7 @@ const apiUrl = import.meta.env.VITE_API_URL as string | undefined
 const settings = [
   { label: "Data mode", value: DEMO_MODE ? "Demo data (fictional)" : "Live backend" },
   { label: "Backend API URL", value: apiUrl ?? "Not configured yet (Phase 5)" },
-  { label: "AI provider", value: "Google Gemini, configured on the backend only (Phase 6)" },
-  { label: "Maximum upload size", value: `${MAX_UPLOAD_MB} MB` },
+  { label: "AI provider", value: "Google Gemini, configured on the backend only" },  { label: "Maximum upload size", value: `${MAX_UPLOAD_MB} MB` },
   { label: "Build mode", value: import.meta.env.MODE },
 ]
 

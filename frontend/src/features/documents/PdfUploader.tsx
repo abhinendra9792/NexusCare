@@ -180,9 +180,9 @@ export function PdfUploader({ onUpload }: PdfUploaderProps) {
         <div role="status" className="flex gap-2 rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
-            Uploaded. {result.pageCount ?? 0} page(s) read and {(result.extractedCharCount ?? 0).toLocaleString()}{" "}
-            characters of text extracted. The file itself was not stored. AI extraction of appointments and follow-ups
-            arrives in Phase 6.
+            Processed. {result.pageCount ?? 0} page(s) read and {(result.extractedCharCount ?? 0).toLocaleString()}{" "}
+            characters of text extracted. The file itself was not stored. The AI&apos;s proposed appointments and
+            follow-up actions are awaiting review, and nothing is approved until a staff member checks each item.
           </p>
         </div>
       )}
@@ -192,6 +192,12 @@ export function PdfUploader({ onUpload }: PdfUploaderProps) {
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>The file passed the browser checks. Demo mode is on, so nothing has been uploaded.</p>
         </div>
+      )}
+
+      {isUploading && (
+        <p className="text-xs text-slate-500" aria-live="polite">
+          The AI is reading the document. This can take up to a minute.
+        </p>
       )}
 
       <Button
@@ -204,7 +210,7 @@ export function PdfUploader({ onUpload }: PdfUploaderProps) {
         ) : (
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         )}
-        {isUploading ? "Uploading..." : "Upload and extract text"}
+        {isUploading ? "Reading with AI..." : "Upload and extract with AI"}
       </Button>
     </div>
   )

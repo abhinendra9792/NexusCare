@@ -41,9 +41,9 @@ export default function AppointmentsPage() {
             label="Patient or caregiver note"
             placeholder="e.g. Hi, this is Priya calling for my father (ref PT-1042). He needs a follow-up after his blood test, ideally next Tuesday morning. Please call me back on my mobile."
             helpText="Use fictional details only. Type the note or record it with your voice."
-            submitLabel={DEMO_MODE ? "Generate request" : "Save as draft"}
+                        submitLabel={DEMO_MODE ? "Generate request" : "Generate with AI"}
             onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-            successMessage="Saved as a draft. AI extraction will be added in Phase 6, and nothing is approved until a staff member reviews it."
+                        successMessage="AI draft ready. It is awaiting review below, and nothing is approved until a staff member checks it."
             enableVoice
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
