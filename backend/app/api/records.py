@@ -8,8 +8,9 @@ from app.core.emergency import may_be_emergency
 from app.db import models
 from app.db.enums import RecordStatus
 from app.db.session import get_db
+from app.prompts import service_request as service_prompt
 from app.prompts import visit_summary as visit_prompt
-from app.schemas.ai_outputs import VisitSummaryDraft
+from app.schemas.ai_outputs import ServiceClassification, VisitSummaryDraft
 from app.schemas.records import (
     CarePlanCreate,
     CarePlanRead,
@@ -56,7 +57,7 @@ def _run_visit_ai(db: Session, record: models.VisitSummary, ai: AIService) -> mo
         ai,
         schema=VisitSummaryDraft,
         system_instruction=visit_prompt.SYSTEM_INSTRUCTION,
-               prompt=visit_prompt.build_prompt(record.source_text, date.today()),
+        prompt=visit_prompt.build_prompt(record.source_text, date.today()),
         prompt_version=visit_prompt.PROMPT_VERSION,
         **VISIT,
     )
@@ -87,12 +88,48 @@ service_requests_router = APIRouter(prefix="/api/v1/service-requests", tags=["se
 SERVICE = {"entity_type": "service_request", "label": "Service request"}
 
 
-@service_requests_router.post("", response_model=ServiceRequestRead, status_code=201)
-def create_service_request(payload: ServiceRequestCreate, db: Session = Depends(get_db)):
-    flagged = may_be_emergency(payload.source_text)
-    record = models.ServiceRequest(source_text=payload.source_text, possible_emergency=flagged)
+def _new_service_request(db: Session, source_text: str) -> models.ServiceRequest:
+    """Save the inquiry. The emergency keyword check always runs before any AI call."""
+    flagged = may_be_emergency(source_text)
+    record = models.ServiceRequest(source_text=source_text, possible_emergency=flagged)
     summary = "Service request created (possible emergency flagged)" if flagged else "Service request created"
     return svc.create_record(db, record, summary=summary, **SERVICE)
+
+
+def _store_service_result(record: models.ServiceRequest, result: ServiceClassification) -> None:
+    record.draft_content = result.model_dump(mode="json")
+    # The AI may raise the emergency flag, but can never clear a keyword flag.
+    if result.possible_emergency:
+        record.possible_emergency = True
+
+
+def _run_service_ai(db: Session, record: models.ServiceRequest, ai: AIService) -> models.ServiceRequest:
+    return svc.run_ai_generation(
+        db,
+        record,
+        ai,
+        schema=ServiceClassification,
+        system_instruction=service_prompt.SYSTEM_INSTRUCTION,
+        prompt=service_prompt.build_prompt(record.source_text, date.today()),
+        prompt_version=service_prompt.PROMPT_VERSION,
+        apply_result=_store_service_result,
+        **SERVICE,
+    )
+
+
+@service_requests_router.post("", response_model=ServiceRequestRead, status_code=201)
+def create_service_request(payload: ServiceRequestCreate, db: Session = Depends(get_db)):
+    return _new_service_request(db, payload.source_text)
+
+
+@service_requests_router.post("/generate", response_model=ServiceRequestRead, status_code=201)
+def generate_service_request(
+    payload: ServiceRequestCreate,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    record = _new_service_request(db, payload.source_text)
+    return _run_service_ai(db, record, ai)
 
 
 @service_requests_router.get("", response_model=list[ServiceRequestRead])
@@ -108,6 +145,16 @@ def get_service_request(record_id: UUID, db: Session = Depends(get_db)):
 @service_requests_router.post("/{record_id}/cancel", response_model=ServiceRequestRead)
 def cancel_service_request(record_id: UUID, db: Session = Depends(get_db)):
     return svc.cancel_record(db, models.ServiceRequest, str(record_id), **SERVICE)
+
+
+@service_requests_router.post("/{record_id}/retry", response_model=ServiceRequestRead)
+def retry_service_request(
+    record_id: UUID,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    record = svc.get_record(db, models.ServiceRequest, str(record_id), label=SERVICE["label"])
+    return _run_service_ai(db, record, ai)
 
 
 # ---------- Care plans ----------
