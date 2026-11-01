@@ -1,6 +1,9 @@
 from datetime import date
 from uuid import UUID
 
+from app.schemas.records import CarePlanTaskCreate, CarePlanTaskUpdate
+from app.services import care_plan_service
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
@@ -304,3 +307,46 @@ def retry_care_plan(
 ):
     plan = svc.get_record(db, models.CarePlan, str(record_id), label=CARE["label"], options=WITH_TASKS)
     return _run_care_ai(db, plan, ai)
+
+
+
+# ---------- Care plan review ----------
+
+
+@care_plans_router.post("/{record_id}/tasks", response_model=CarePlanRead, status_code=201)
+def add_care_plan_task(record_id: UUID, payload: CarePlanTaskCreate, db: Session = Depends(get_db)):
+    """Add a manual task. It starts as a draft and is reviewed like AI tasks."""
+    return care_plan_service.add_manual_task(db, str(record_id), payload)
+
+
+@care_plans_router.patch("/tasks/{task_id}", response_model=CarePlanRead)
+def update_care_plan_task(task_id: UUID, payload: CarePlanTaskUpdate, db: Session = Depends(get_db)):
+    """Edit a draft task, or complete / reopen / cancel an approved task."""
+    return care_plan_service.update_task(db, str(task_id), payload)
+
+
+@care_plans_router.delete("/tasks/{task_id}", response_model=CarePlanRead)
+def delete_care_plan_task(task_id: UUID, db: Session = Depends(get_db)):
+    """Remove a draft task. Reviewed tasks cannot be deleted."""
+    return care_plan_service.delete_task(db, str(task_id))
+
+
+@care_plans_router.post("/tasks/{task_id}/approve", response_model=CarePlanRead)
+def approve_care_plan_task(task_id: UUID, db: Session = Depends(get_db)):
+    return care_plan_service.approve_task(db, str(task_id))
+
+
+@care_plans_router.post("/tasks/{task_id}/reject", response_model=CarePlanRead)
+def reject_care_plan_task(task_id: UUID, db: Session = Depends(get_db)):
+    return care_plan_service.reject_task(db, str(task_id))
+
+
+@care_plans_router.post("/{record_id}/approve", response_model=CarePlanRead)
+def approve_care_plan(record_id: UUID, db: Session = Depends(get_db)):
+    """Approve the plan once every task has been reviewed."""
+    return care_plan_service.approve_plan(db, str(record_id))
+
+
+@care_plans_router.post("/{record_id}/reject", response_model=CarePlanRead)
+def reject_care_plan(record_id: UUID, db: Session = Depends(get_db)):
+    return care_plan_service.reject_plan(db, str(record_id))

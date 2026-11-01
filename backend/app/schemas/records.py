@@ -75,3 +75,25 @@ class CarePlanTaskRead(CamelModel):
 class CarePlanRead(RecordReadBase):
     title: str | None
     tasks: list[CarePlanTaskRead]
+
+
+
+TaskDescription = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=300)]
+TaskReason = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)]
+
+
+class CarePlanTaskCreate(CamelModel):
+    description: TaskDescription
+    source_reason: TaskReason | None = None
+    suggested_due_date: date | None = None
+    priority: TaskPriority | None = None
+
+
+class CarePlanTaskUpdate(CamelModel):
+    """Send only the fields you want to change."""
+
+    description: TaskDescription | None = None
+    source_reason: TaskReason | None = None
+    suggested_due_date: date | None = None
+    priority: TaskPriority | None = None
+    task_status: TaskStatus | None = None
