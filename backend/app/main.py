@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import activity, appointments, dashboard, health
+from app.api import activity, appointments, dashboard, documents, health, records
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 
@@ -36,6 +36,10 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router)
     app.include_router(activity.router)
     app.include_router(appointments.router)
+    app.include_router(records.visit_summaries_router)
+    app.include_router(records.service_requests_router)
+    app.include_router(records.care_plans_router)
+    app.include_router(documents.router)
     return app
 
 
