@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.emergency import may_be_emergency
 from app.db import models
-from app.db.enums import RecordStatus
+from app.db.enums import RecordStatus, TaskOrigin, TaskPriority, TaskReviewStatus, TaskStatus
 from app.db.session import get_db
+from app.prompts import care_plan as care_prompt
 from app.prompts import service_request as service_prompt
 from app.prompts import visit_summary as visit_prompt
-from app.schemas.ai_outputs import ServiceClassification, VisitSummaryDraft
+from app.schemas.ai_outputs import CarePlanDraft, ServiceClassification, VisitSummaryDraft
 from app.schemas.records import (
     CarePlanCreate,
     CarePlanRead,
@@ -168,10 +169,73 @@ def _with_tasks(plan: models.CarePlan) -> models.CarePlan:
     return plan
 
 
+def _parse_due_date(value) -> date | None:
+    if value is None or isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None  # never store an invalid date; staff can set it during review
+
+
+def _store_care_plan_tasks(plan: models.CarePlan, result: CarePlanDraft) -> None:
+    """Turn AI tasks into draft task rows.
+
+    On retry, only earlier AI tasks that are still unreviewed drafts are replaced.
+    Manual tasks and already reviewed tasks are kept.
+    """
+    plan.tasks[:] = [
+        task
+        for task in plan.tasks
+        if not (task.origin == TaskOrigin.AI and task.review_status == TaskReviewStatus.DRAFT)
+    ]
+    next_order = max((task.sort_order for task in plan.tasks), default=-1) + 1
+
+    for offset, item in enumerate(result.tasks):
+        plan.tasks.append(
+            models.CarePlanTask(
+                description=item.description[:300],
+                source_reason=item.source_reason[:500] if item.source_reason else None,
+                suggested_due_date=_parse_due_date(item.suggested_due_date),
+                priority=TaskPriority(item.priority) if item.priority else None,
+                task_status=TaskStatus.PENDING,
+                review_status=TaskReviewStatus.DRAFT,
+                origin=TaskOrigin.AI,
+                sort_order=next_order + offset,
+            )
+        )
+
+
+def _run_care_ai(db: Session, plan: models.CarePlan, ai: AIService) -> models.CarePlan:
+    return _with_tasks(
+        svc.run_ai_generation(
+            db,
+            plan,
+            ai,
+            schema=CarePlanDraft,
+            system_instruction=care_prompt.SYSTEM_INSTRUCTION,
+            prompt=care_prompt.build_prompt(plan.source_text, date.today()),
+            prompt_version=care_prompt.PROMPT_VERSION,
+            apply_result=_store_care_plan_tasks,
+            **CARE,
+        )
+    )
+
+
 @care_plans_router.post("", response_model=CarePlanRead, status_code=201)
 def create_care_plan(payload: CarePlanCreate, db: Session = Depends(get_db)):
     plan = models.CarePlan(source_text=payload.source_text, title=payload.title)
     return _with_tasks(svc.create_record(db, plan, **CARE))
+
+
+@care_plans_router.post("/generate", response_model=CarePlanRead, status_code=201)
+def generate_care_plan(
+    payload: CarePlanCreate,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    plan = svc.create_record(db, models.CarePlan(source_text=payload.source_text, title=payload.title), **CARE)
+    return _run_care_ai(db, plan, ai)
 
 
 @care_plans_router.get("", response_model=list[CarePlanRead])
@@ -187,3 +251,13 @@ def get_care_plan(record_id: UUID, db: Session = Depends(get_db)):
 @care_plans_router.post("/{record_id}/cancel", response_model=CarePlanRead)
 def cancel_care_plan(record_id: UUID, db: Session = Depends(get_db)):
     return _with_tasks(svc.cancel_record(db, models.CarePlan, str(record_id), options=WITH_TASKS, **CARE))
+
+
+@care_plans_router.post("/{record_id}/retry", response_model=CarePlanRead)
+def retry_care_plan(
+    record_id: UUID,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    plan = svc.get_record(db, models.CarePlan, str(record_id), label=CARE["label"], options=WITH_TASKS)
+    return _run_care_ai(db, plan, ai)
