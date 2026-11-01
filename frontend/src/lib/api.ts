@@ -1,7 +1,17 @@
-﻿import type { ActivityEntry, ApiAppointment, CreateAppointmentInput, DashboardStats } from "@/types"
+﻿import type {
+  ActivityEntry,
+  ApiAppointment,
+  ApiCarePlan,
+  ApiDocument,
+  ApiServiceRequest,
+  ApiVisitSummary,
+  CreateAppointmentInput,
+  DashboardStats,
+} from "@/types"
 
 const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "")
 const DEFAULT_TIMEOUT_MS = 15000
+const UPLOAD_TIMEOUT_MS = 60000
 
 export class ApiError extends Error {
   readonly status: number
@@ -42,12 +52,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   const hasBody = options.body !== undefined
+  const isFormData = options.body instanceof FormData
+  let body: BodyInit | undefined
+  if (hasBody) body = isFormData ? (options.body as FormData) : JSON.stringify(options.body)
+
   const response = await send(
     `${API_URL}${path}`,
     {
       method: options.method ?? "GET",
-      headers: hasBody ? { "Content-Type": "application/json" } : undefined,
-      body: hasBody ? JSON.stringify(options.body) : undefined,
+      // For file uploads the browser sets the multipart Content-Type itself.
+      headers: hasBody && !isFormData ? { "Content-Type": "application/json" } : undefined,
+      body,
     },
     options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   )
@@ -73,10 +88,30 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 export const api = {
   getDashboardStats: () => apiRequest<DashboardStats>("/api/v1/dashboard/stats"),
+  listActivity: (limit = 50) => apiRequest<ActivityEntry[]>(`/api/v1/activity?limit=${limit}`),
+
   listAppointments: (limit = 50) => apiRequest<ApiAppointment[]>(`/api/v1/appointments?limit=${limit}`),
   createAppointment: (input: CreateAppointmentInput) =>
     apiRequest<ApiAppointment>("/api/v1/appointments", { method: "POST", body: input }),
   cancelAppointment: (id: string) =>
     apiRequest<ApiAppointment>(`/api/v1/appointments/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
-  listActivity: (limit = 50) => apiRequest<ActivityEntry[]>(`/api/v1/activity?limit=${limit}`),
+
+  listVisitSummaries: (limit = 50) => apiRequest<ApiVisitSummary[]>(`/api/v1/visit-summaries?limit=${limit}`),
+  createVisitSummary: (sourceText: string) =>
+    apiRequest<ApiVisitSummary>("/api/v1/visit-summaries", { method: "POST", body: { sourceText } }),
+
+  listServiceRequests: (limit = 50) => apiRequest<ApiServiceRequest[]>(`/api/v1/service-requests?limit=${limit}`),
+  createServiceRequest: (sourceText: string) =>
+    apiRequest<ApiServiceRequest>("/api/v1/service-requests", { method: "POST", body: { sourceText } }),
+
+  listCarePlans: (limit = 50) => apiRequest<ApiCarePlan[]>(`/api/v1/care-plans?limit=${limit}`),
+  createCarePlan: (input: { sourceText: string; title?: string }) =>
+    apiRequest<ApiCarePlan>("/api/v1/care-plans", { method: "POST", body: input }),
+
+  listDocuments: (limit = 50) => apiRequest<ApiDocument[]>(`/api/v1/documents?limit=${limit}`),
+  uploadDocument: (file: File) => {
+    const form = new FormData()
+    form.append("file", file)
+    return apiRequest<ApiDocument>("/api/v1/documents", { method: "POST", body: form, timeoutMs: UPLOAD_TIMEOUT_MS })
+  },
 }

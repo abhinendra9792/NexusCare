@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react"
-import { CheckCircle2, FileText, Loader2, Sparkles, UploadCloud, X } from "lucide-react"
+import { AlertTriangle, CheckCircle2, FileText, Loader2, Sparkles, UploadCloud, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -9,6 +9,15 @@ type SelectedFile = {
   file: File
   status: "checking" | "ready" | "invalid"
   error?: string
+}
+
+export type UploadResult = {
+  pageCount: number | null
+  extractedCharCount: number | null
+}
+
+type PdfUploaderProps = {
+  onUpload?: (file: File) => Promise<UploadResult>
 }
 
 async function validatePdf(file: File): Promise<string | null> {
@@ -31,20 +40,25 @@ function formatSize(bytes: number): string {
 }
 
 const statusStyles = {
-  checking: { label: "Checking file…", className: "bg-blue-50 text-blue-700" },
+  checking: { label: "Checking file...", className: "bg-blue-50 text-blue-700" },
   ready: { label: "Ready to process", className: "bg-teal-50 text-teal-700" },
   invalid: { label: "Cannot be processed", className: "bg-red-50 text-red-700" },
 }
 
-export function PdfUploader() {
+export function PdfUploader({ onUpload }: PdfUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [selected, setSelected] = useState<SelectedFile | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [result, setResult] = useState<UploadResult | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   async function handleFile(file: File | undefined) {
     if (!file) return
     setSubmitted(false)
+    setResult(null)
+    setUploadError(null)
     setSelected({ file, status: "checking" })
     const error = await validatePdf(file)
     setSelected({ file, status: error ? "invalid" : "ready", error: error ?? undefined })
@@ -64,6 +78,26 @@ export function PdfUploader() {
   function clear() {
     setSelected(null)
     setSubmitted(false)
+    setUploadError(null)
+  }
+
+  async function handleExtract() {
+    if (!selected || selected.status !== "ready") return
+    setUploadError(null)
+    if (!onUpload) {
+      setSubmitted(true)
+      return
+    }
+    setIsUploading(true)
+    try {
+      const uploaded = await onUpload(selected.file)
+      setResult(uploaded)
+      setSelected(null)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed. Please try again.")
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   return (
@@ -82,7 +116,7 @@ export function PdfUploader() {
       >
         <UploadCloud className="h-10 w-10 text-teal-600" aria-hidden="true" />
         <p className="mt-3 text-sm font-medium text-slate-900">Drag and drop a PDF here</p>
-        <p className="mt-1 text-xs text-slate-500">PDF only · up to {MAX_UPLOAD_MB} MB · fictional documents only</p>
+        <p className="mt-1 text-xs text-slate-500">PDF only, up to {MAX_UPLOAD_MB} MB, fictional documents only</p>
         <Button type="button" variant="outline" className="mt-4" onClick={() => inputRef.current?.click()}>
           Choose file
         </Button>
@@ -105,7 +139,10 @@ export function PdfUploader() {
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-slate-500">{formatSize(selected.file.size)}</span>
                 <span
-                  className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium", statusStyles[selected.status].className)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
+                    statusStyles[selected.status].className,
+                  )}
                   aria-live="polite"
                 >
                   {selected.status === "checking" && <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />}
@@ -118,30 +155,56 @@ export function PdfUploader() {
                 </p>
               )}
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Remove file" onClick={clear}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Remove file"
+              onClick={clear}
+              disabled={isUploading}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
 
+      {uploadError && (
+        <div role="alert" className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>{uploadError}</p>
+        </div>
+      )}
+
+      {result && (
+        <div role="status" className="flex gap-2 rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-800">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            Uploaded. {result.pageCount ?? 0} page(s) read and {(result.extractedCharCount ?? 0).toLocaleString()}{" "}
+            characters of text extracted. The file itself was not stored. AI extraction of appointments and follow-ups
+            arrives in Phase 6.
+          </p>
+        </div>
+      )}
+
       {submitted && (
         <div role="status" className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>
-            The file passed the browser checks. Upload and AI extraction will be connected in Phases 5 and 6, where the
-            server will check the file again. Nothing has been uploaded yet.
-          </p>
+          <p>The file passed the browser checks. Demo mode is on, so nothing has been uploaded.</p>
         </div>
       )}
 
       <Button
         className="gap-2 bg-teal-600 text-white hover:bg-teal-700"
-        disabled={selected?.status !== "ready"}
-        onClick={() => setSubmitted(true)}
+        disabled={selected?.status !== "ready" || isUploading}
+        onClick={handleExtract}
       >
-        <Sparkles className="h-4 w-4" aria-hidden="true" />
-        Extract details
+        {isUploading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+        )}
+        {isUploading ? "Uploading..." : "Upload and extract text"}
       </Button>
     </div>
   )

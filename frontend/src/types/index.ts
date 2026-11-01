@@ -72,3 +72,76 @@ export type CreateAppointmentInput = {
   sourceText: string
   sourceType: "text" | "voice"
 }
+
+
+export type ApiRecordBase = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  sourceText: string
+  status: RecordStatus
+  aiModel: string | null
+  errorMessage: string | null
+  approvedAt: string | null
+}
+
+export type ApiVisitSummary = ApiRecordBase & {
+  draftContent: Record<string, unknown> | null
+  approvedContent: Record<string, unknown> | null
+}
+
+export type ServiceCategory =
+  | "appointment_desk"
+  | "billing"
+  | "medical_records"
+  | "technical_support"
+  | "general_support"
+  | "other_needs_review"
+
+export type ApiServiceRequest = ApiRecordBase & {
+  draftContent: Record<string, unknown> | null
+  approvedContent: Record<string, unknown> | null
+  category: ServiceCategory | null
+  possibleEmergency: boolean
+}
+
+export type ApiCarePlanTask = {
+  id: string
+  description: string
+  sourceReason: string | null
+  suggestedDueDate: string | null
+  priority: TaskPriority | null
+  taskStatus: CarePlanTask["taskStatus"]
+  reviewStatus: CarePlanTask["reviewStatus"]
+  origin: CarePlanTask["origin"]
+  sortOrder: number
+}
+
+export type ApiCarePlan = ApiRecordBase & {
+  title: string | null
+  tasks: ApiCarePlanTask[]
+}
+
+export type ApiExtractedItem = {
+  id: string
+  itemType: "appointment" | "follow_up"
+  draftContent: Record<string, unknown>
+  approvedContent: Record<string, unknown> | null
+  status: RecordStatus
+  approvedAt: string | null
+}
+
+export type ApiDocument = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  originalFilename: string
+  fileSizeBytes: number
+  pageCount: number | null
+  extractedCharCount: number | null
+  textPreview: string | null
+  status: RecordStatus
+  aiModel: string | null
+  errorMessage: string | null
+  items: ApiExtractedItem[]
+}

@@ -1,9 +1,11 @@
-﻿import { Building2 } from "lucide-react"
+﻿import { Building2, Inbox, Siren } from "lucide-react"
 import { EmergencyBanner } from "@/components/shared/EmergencyBanner"
-import { EmptyState } from "@/components/shared/EmptyState"
 import { NoteInputForm } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
+import { RecordListPanel, RecordRow } from "@/components/shared/RecordListPanel"
+import { useCreateServiceRequest, useServiceRequests } from "@/hooks/useRecords"
+import { DEMO_MODE } from "@/lib/demoData"
 import { mayBeEmergency } from "@/lib/emergency"
 
 const departments = [
@@ -16,6 +18,13 @@ const departments = [
 ]
 
 export default function ServiceRequestsPage() {
+  const requestsQuery = useServiceRequests()
+  const createRequest = useCreateServiceRequest()
+
+  async function saveDraft(note: string) {
+    await createRequest.mutateAsync(note)
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -30,7 +39,9 @@ export default function ServiceRequestsPage() {
             label="Inquiry message"
             placeholder="e.g. I was charged twice for my visit on 12 October. Can someone check my invoice?"
             helpText="Use fictional details only. Staff can correct the suggested department before approving."
-            submitLabel="Classify inquiry"
+            submitLabel={DEMO_MODE ? "Classify inquiry" : "Save as draft"}
+            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
+            successMessage="Saved as a draft. AI classification will be added in Phase 6, and staff approve every routing decision."
             minLength={10}
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
@@ -51,12 +62,28 @@ export default function ServiceRequestsPage() {
         </Panel>
       </div>
 
-      <Panel title="Routed requests">
-        <EmptyState
-          title="No routed requests yet"
-          description="Approved routing decisions will appear here once the backend is connected."
-        />
-      </Panel>
+      <RecordListPanel
+        title="Service requests"
+        query={requestsQuery}
+        icon={Inbox}
+        emptyTitle="No service requests yet"
+        emptyDescription="Saved inquiries and approved routing decisions will appear here."
+        renderItem={(item) => (
+          <RecordRow
+            text={item.sourceText}
+            createdAt={item.createdAt}
+            status={item.status}
+            badges={
+              item.possibleEmergency ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 ring-1 ring-inset ring-red-200">
+                  <Siren className="h-3 w-3" aria-hidden="true" />
+                  Possible emergency
+                </span>
+              ) : null
+            }
+          />
+        )}
+      />
     </div>
   )
 }

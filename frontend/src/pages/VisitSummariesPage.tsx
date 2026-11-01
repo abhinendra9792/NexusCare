@@ -1,8 +1,10 @@
 ﻿import { CircleDot, FileText, Lightbulb } from "lucide-react"
-import { EmptyState } from "@/components/shared/EmptyState"
 import { NoteInputForm } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
+import { RecordListPanel, RecordRow } from "@/components/shared/RecordListPanel"
+import { useCreateVisitSummary, useVisitSummaries } from "@/hooks/useRecords"
+import { DEMO_MODE } from "@/lib/demoData"
 
 const sections = [
   "Visit purpose",
@@ -14,6 +16,13 @@ const sections = [
 ]
 
 export default function VisitSummariesPage() {
+  const summariesQuery = useVisitSummaries()
+  const createSummary = useCreateVisitSummary()
+
+  async function saveDraft(note: string) {
+    await createSummary.mutateAsync(note)
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -28,7 +37,9 @@ export default function VisitSummariesPage() {
             label="Notes from the visit"
             placeholder="e.g. PT-0931 attended a routine review. Reported sleeping better since the last visit. Asked about repeat physiotherapy sessions. Wants last month's report sent by email."
             helpText="Use fictional details only. Only information in these notes will be used."
-            submitLabel="Generate summary"
+            submitLabel={DEMO_MODE ? "Generate summary" : "Save as draft"}
+            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
+            successMessage="Saved as a draft. AI summarisation will be added in Phase 6, and nothing is approved until a staff member reviews it."
             enableVoice
           />
         </Panel>
@@ -63,13 +74,14 @@ export default function VisitSummariesPage() {
         </Panel>
       </div>
 
-      <Panel title="Saved summaries">
-        <EmptyState
-          icon={FileText}
-          title="No summaries yet"
-          description="Approved visit summaries will appear here."
-        />
-      </Panel>
+      <RecordListPanel
+        title="Saved summaries"
+        query={summariesQuery}
+        icon={FileText}
+        emptyTitle="No summaries yet"
+        emptyDescription="Saved visit notes and approved summaries will appear here."
+        renderItem={(item) => <RecordRow text={item.sourceText} createdAt={item.createdAt} status={item.status} />}
+      />
     </div>
   )
 }
