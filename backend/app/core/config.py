@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # SecretStr hides the key if settings are ever printed or logged.
     gemini_api_key: SecretStr | None = None
     gemini_model: str | None = None
+    ai_timeout_seconds: float = Field(default=30, ge=5, le=120)
+    ai_max_retries: int = Field(default=2, ge=0, le=3)
 
     @property
     def cors_origins(self) -> list[str]:
