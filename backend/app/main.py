@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import activity, appointments, dashboard, documents, health, records
 from app.core.config import get_settings
-from app.core.errors import register_error_handlers
+from app.core.errors import SafeErrorMiddleware, register_error_handlers
 from app.core.rate_limit import (
     AI_RATE_LIMIT_PER_MINUTE,
     AIRateLimitMiddleware,
@@ -29,7 +29,13 @@ def create_app() -> FastAPI:
     )
 
     # Middleware added later runs first. CORS is added last so that it wraps
-    # everything, including 429 responses, and the browser can read them.
+    # everything, including 429 and 500 responses, and the browser can read them.
+
+    # Production only: keep full tracebacks (which may contain request data) out of the logs.
+    # In development it stays off, so tracebacks remain available for debugging.
+    if is_production:
+        app.add_middleware(SafeErrorMiddleware)
+
     limiter = SlidingWindowLimiter(AI_RATE_LIMIT_PER_MINUTE)
     app.state.ai_rate_limiter = limiter
     app.add_middleware(SecurityHeadersMiddleware)

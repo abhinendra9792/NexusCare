@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("nexuscare")
 
@@ -59,3 +60,22 @@ def register_error_handlers(app: FastAPI) -> None:
             status_code=500,
             content=error_body("INTERNAL_ERROR", "An unexpected error occurred. Please try again."),
         )
+
+
+class SafeErrorMiddleware(BaseHTTPMiddleware):
+    """Production only: stop unexpected errors here, so full tracebacks never reach the logs.
+
+    Tracebacks can contain request data (for example database parameters holding a note).
+    Only the error type is logged. In development this middleware is off, so tracebacks
+    remain available for debugging with fictional data.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logger.error("Unhandled error: %s", type(exc).__name__)
+            return JSONResponse(
+                status_code=500,
+                content=error_body("INTERNAL_ERROR", "An unexpected error occurred. Please try again."),
+            )
