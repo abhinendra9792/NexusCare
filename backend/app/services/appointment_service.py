@@ -1,18 +1,17 @@
+from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.db import models
 from app.db.enums import RecordStatus
-from app.schemas.appointments import AppointmentCreate
-from app.services.activity_service import log_activity
-from app.services.status_service import apply_transition
-
-from datetime import date
-
 from app.prompts import appointment as appointment_prompt
 from app.schemas.ai_outputs import AppointmentExtraction
+from app.schemas.appointments import AppointmentCreate
+from app.services.activity_service import log_activity
 from app.services.ai_service import AIError, AIService
+from app.services.status_service import apply_transition
 
 ENTITY_TYPE = "appointment_request"
 
@@ -68,6 +67,11 @@ def cancel_appointment(db: Session, appointment_id: str) -> models.AppointmentRe
     db.commit()
     db.refresh(record)
     return record
+
+
+# ---------- AI generation ----------
+
+
 def _run_ai_extraction(
     db: Session,
     record: models.AppointmentRequest,
@@ -137,3 +141,61 @@ def retry_appointment(
     """Re-run AI on a failed or awaiting_review record."""
     record = get_appointment(db, appointment_id)
     return _run_ai_extraction(db, record, ai, today)
+
+
+# ---------- Review and approval ----------
+
+
+def update_appointment_draft(
+    db: Session, appointment_id: str, draft: AppointmentExtraction
+) -> models.AppointmentRequest:
+    """Save a reviewer's edits. Only allowed while the record awaits review."""
+    record = get_appointment(db, appointment_id)
+    if record.status != RecordStatus.AWAITING_REVIEW:
+        raise AppError("NOT_EDITABLE", "Only drafts that are awaiting review can be edited.", 409)
+    record.draft_content = draft.model_dump(mode="json")
+    log_activity(
+        db,
+        entity_type=ENTITY_TYPE,
+        entity_id=record.id,
+        action="edited",
+        summary="Appointment draft edited by reviewer",
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def approve_appointment(db: Session, appointment_id: str) -> models.AppointmentRequest:
+    """Copy the reviewed draft into approved_content. This does not book an appointment."""
+    record = get_appointment(db, appointment_id)
+    if record.draft_content is None:
+        raise AppError("NOTHING_TO_APPROVE", "There is no draft to approve.", 409)
+    apply_transition(
+        db,
+        record,
+        RecordStatus.APPROVED,
+        entity_type=ENTITY_TYPE,
+        action="approved",
+        summary="Appointment request approved",
+    )
+    record.approved_content = dict(record.draft_content)
+    record.approved_at = models.utcnow()
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def reject_appointment(db: Session, appointment_id: str) -> models.AppointmentRequest:
+    record = get_appointment(db, appointment_id)
+    apply_transition(
+        db,
+        record,
+        RecordStatus.REJECTED,
+        entity_type=ENTITY_TYPE,
+        action="rejected",
+        summary="Appointment request rejected",
+    )
+    db.commit()
+    db.refresh(record)
+    return record

@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import RecordStatus
 from app.db.session import get_db
-from app.services.ai_service import AIService, get_ai_service
-from app.schemas.appointments import AppointmentCreate, AppointmentRead
+from app.schemas.appointments import AppointmentCreate, AppointmentDraftUpdate, AppointmentRead
 from app.services import appointment_service
+from app.services.ai_service import AIService, get_ai_service
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
 
@@ -26,15 +26,6 @@ def list_appointments(
     return appointment_service.list_appointments(db, status=status_filter, limit=limit)
 
 
-@router.get("/{appointment_id}", response_model=AppointmentRead)
-def get_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
-    return appointment_service.get_appointment(db, str(appointment_id))
-
-
-@router.post("/{appointment_id}/cancel", response_model=AppointmentRead)
-def cancel_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
-    return appointment_service.cancel_appointment(db, str(appointment_id))
-
 @router.post("/generate", response_model=AppointmentRead, status_code=201)
 def generate_appointment(
     payload: AppointmentCreate,
@@ -43,6 +34,33 @@ def generate_appointment(
 ):
     """Save the note and run AI extraction. Returns the draft for review."""
     return appointment_service.generate_appointment(db, payload, ai)
+
+
+@router.get("/{appointment_id}", response_model=AppointmentRead)
+def get_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
+    return appointment_service.get_appointment(db, str(appointment_id))
+
+
+@router.patch("/{appointment_id}", response_model=AppointmentRead)
+def update_appointment(appointment_id: UUID, payload: AppointmentDraftUpdate, db: Session = Depends(get_db)):
+    """Save reviewer edits to the draft. Only allowed while awaiting review."""
+    return appointment_service.update_appointment_draft(db, str(appointment_id), payload.draft_content)
+
+
+@router.post("/{appointment_id}/approve", response_model=AppointmentRead)
+def approve_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
+    """Approve the reviewed draft. This records the request; it does not book an appointment."""
+    return appointment_service.approve_appointment(db, str(appointment_id))
+
+
+@router.post("/{appointment_id}/reject", response_model=AppointmentRead)
+def reject_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
+    return appointment_service.reject_appointment(db, str(appointment_id))
+
+
+@router.post("/{appointment_id}/cancel", response_model=AppointmentRead)
+def cancel_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
+    return appointment_service.cancel_appointment(db, str(appointment_id))
 
 
 @router.post("/{appointment_id}/retry", response_model=AppointmentRead)

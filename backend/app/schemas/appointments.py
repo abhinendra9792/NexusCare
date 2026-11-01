@@ -3,6 +3,7 @@ from typing import Annotated
 from pydantic import StringConstraints
 
 from app.db.enums import RecordStatus, SourceType
+from app.schemas.ai_outputs import AppointmentExtraction
 from app.schemas.common import CamelModel, UtcDatetime
 
 MAX_TEXT_LENGTH = 5000
@@ -13,6 +14,12 @@ SourceText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=
 class AppointmentCreate(CamelModel):
     source_text: SourceText
     source_type: SourceType = SourceType.TEXT
+
+
+class AppointmentDraftUpdate(CamelModel):
+    """A reviewer's edited draft. It must still match the AI output schema."""
+
+    draft_content: AppointmentExtraction
 
 
 class AppointmentRead(CamelModel):
