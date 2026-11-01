@@ -107,6 +107,12 @@ export const api = {
       method: "POST",
       timeoutMs: AI_TIMEOUT_MS,
     }),
+      updateAppointment: (recordId: string, draftContent: Record<string, unknown>) =>
+    apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}`, { method: "PATCH", body: { draftContent } }),
+  approveAppointment: (recordId: string) =>
+    apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}/approve`, { method: "POST" }),
+  rejectAppointment: (recordId: string) =>
+    apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}/reject`, { method: "POST" }),
   cancelAppointment: (recordId: string) =>
     apiRequest<ApiAppointment>(`/api/v1/appointments/${id(recordId)}/cancel`, { method: "POST" }),
 

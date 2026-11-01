@@ -145,3 +145,20 @@ export type ApiDocument = {
   errorMessage: string | null
   items: ApiExtractedItem[]
 }
+
+export type ContactPreference = "phone" | "email" | "sms" | "any"
+
+/** The AI draft for an appointment request (keys match the backend schema). */
+export type AppointmentDraft = {
+  patient_reference: string | null
+  requested_date: string | null
+  requested_time: string | null
+  date_original_text: string | null
+  date_is_ambiguous: boolean
+  reason: string | null
+  request_type: RequestType
+  contact_preference: ContactPreference | null
+  additional_notes: string | null
+  missing_information: string[]
+  uncertainty_notes: string[]
+}

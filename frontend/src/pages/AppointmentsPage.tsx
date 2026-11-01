@@ -7,6 +7,7 @@ import { LoadingState } from "@/components/shared/LoadingState"
 import { NoteInputForm, type NoteSourceType } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
+import { AppointmentReviewQueue } from "@/features/appointments/AppointmentReviewQueue"
 import { RecentAppointmentsTable } from "@/features/dashboard/RecentAppointmentsTable"
 import { useAppointments, useCreateAppointment } from "@/hooks/useAppointments"
 import { DEMO_MODE } from "@/lib/demoData"
@@ -23,7 +24,7 @@ export default function AppointmentsPage() {
   const appointmentsQuery = useAppointments()
   const createAppointment = useCreateAppointment()
 
-  async function saveDraft(note: string, sourceType: NoteSourceType) {
+  async function generateDraft(note: string, sourceType: NoteSourceType) {
     await createAppointment.mutateAsync({ sourceText: note, sourceType })
   }
 
@@ -41,9 +42,9 @@ export default function AppointmentsPage() {
             label="Patient or caregiver note"
             placeholder="e.g. Hi, this is Priya calling for my father (ref PT-1042). He needs a follow-up after his blood test, ideally next Tuesday morning. Please call me back on my mobile."
             helpText="Use fictional details only. Type the note or record it with your voice."
-                        submitLabel={DEMO_MODE ? "Generate request" : "Generate with AI"}
-            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-                        successMessage="AI draft ready. It is awaiting review below, and nothing is approved until a staff member checks it."
+            submitLabel={DEMO_MODE ? "Generate request" : "Generate with AI"}
+            onSubmitNote={DEMO_MODE ? undefined : generateDraft}
+            successMessage="AI draft ready. Review it in the queue below. Nothing is approved until a staff member checks it."
             enableVoice
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
@@ -60,6 +61,10 @@ export default function AppointmentsPage() {
           </ul>
         </Panel>
       </div>
+
+      <Panel title="Review queue">
+        <AppointmentReviewQueue />
+      </Panel>
 
       <Panel title="Recent requests" action={<DemoDataBadge />}>
         {appointmentsQuery.isPending ? (
