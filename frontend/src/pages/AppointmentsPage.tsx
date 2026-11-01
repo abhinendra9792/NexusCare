@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
 import { RecentAppointmentsTable } from "@/features/dashboard/RecentAppointmentsTable"
 import { DEMO_MODE, demoAppointments } from "@/lib/demoData"
+import { EmergencyBanner } from "@/components/shared/EmergencyBanner"
+import { mayBeEmergency } from "@/lib/emergency"
 
 const rules = [
   "Missing details are flagged, never invented.",
@@ -33,6 +35,7 @@ export default function AppointmentsPage() {
             helpText="Use fictional details only. Type the note or record it with your voice."
             submitLabel="Generate request"
             enableVoice
+            renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
         </Panel>
 
