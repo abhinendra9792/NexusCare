@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import RecordStatus
 from app.db.session import get_db
+from app.services.ai_service import AIService, get_ai_service
 from app.schemas.appointments import AppointmentCreate, AppointmentRead
 from app.services import appointment_service
 
@@ -33,3 +34,22 @@ def get_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{appointment_id}/cancel", response_model=AppointmentRead)
 def cancel_appointment(appointment_id: UUID, db: Session = Depends(get_db)):
     return appointment_service.cancel_appointment(db, str(appointment_id))
+
+@router.post("/generate", response_model=AppointmentRead, status_code=201)
+def generate_appointment(
+    payload: AppointmentCreate,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    """Save the note and run AI extraction. Returns the draft for review."""
+    return appointment_service.generate_appointment(db, payload, ai)
+
+
+@router.post("/{appointment_id}/retry", response_model=AppointmentRead)
+def retry_appointment(
+    appointment_id: UUID,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    """Re-run AI on a failed or awaiting-review request."""
+    return appointment_service.retry_appointment(db, str(appointment_id), ai)

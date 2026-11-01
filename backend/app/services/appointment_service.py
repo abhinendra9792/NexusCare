@@ -8,6 +8,12 @@ from app.schemas.appointments import AppointmentCreate
 from app.services.activity_service import log_activity
 from app.services.status_service import apply_transition
 
+from datetime import date
+
+from app.prompts import appointment as appointment_prompt
+from app.schemas.ai_outputs import AppointmentExtraction
+from app.services.ai_service import AIError, AIService
+
 ENTITY_TYPE = "appointment_request"
 
 
@@ -62,3 +68,72 @@ def cancel_appointment(db: Session, appointment_id: str) -> models.AppointmentRe
     db.commit()
     db.refresh(record)
     return record
+def _run_ai_extraction(
+    db: Session,
+    record: models.AppointmentRequest,
+    ai: AIService,
+    today: date | None = None,
+) -> models.AppointmentRequest:
+    """Run Gemini on a record: processing -> awaiting_review, or -> failed."""
+    apply_transition(
+        db,
+        record,
+        RecordStatus.PROCESSING,
+        entity_type=ENTITY_TYPE,
+        action="ai_started",
+        summary="AI extraction started",
+    )
+    db.commit()
+
+    try:
+        result, metadata = ai.generate(
+            schema=AppointmentExtraction,
+            system_instruction=appointment_prompt.SYSTEM_INSTRUCTION,
+            prompt=appointment_prompt.build_prompt(record.source_text, today or date.today()),
+        )
+    except AIError as error:
+        error_code = getattr(error, "code", "AI_ERROR")
+        record.error_message = getattr(error, "message", "AI processing failed. Please try again.")
+        apply_transition(
+            db,
+            record,
+            RecordStatus.FAILED,
+            entity_type=ENTITY_TYPE,
+            action="ai_failed",
+            summary=f"AI extraction failed ({error_code})",
+        )
+        db.commit()
+        raise
+
+    metadata["prompt_version"] = appointment_prompt.PROMPT_VERSION
+    record.draft_content = result.model_dump(mode="json")
+    record.ai_model = metadata["model"]
+    record.ai_metadata = metadata
+    record.error_message = None
+    apply_transition(
+        db,
+        record,
+        RecordStatus.AWAITING_REVIEW,
+        entity_type=ENTITY_TYPE,
+        action="ai_completed",
+        summary="AI draft ready for review",
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def generate_appointment(
+    db: Session, data: AppointmentCreate, ai: AIService, today: date | None = None
+) -> models.AppointmentRequest:
+    """Save the note, then run AI extraction on it."""
+    record = create_appointment(db, data)
+    return _run_ai_extraction(db, record, ai, today)
+
+
+def retry_appointment(
+    db: Session, appointment_id: str, ai: AIService, today: date | None = None
+) -> models.AppointmentRequest:
+    """Re-run AI on a failed or awaiting_review record."""
+    record = get_appointment(db, appointment_id)
+    return _run_ai_extraction(db, record, ai, today)
