@@ -1,4 +1,4 @@
-export type RecordStatus =
+﻿export type RecordStatus =
   | "draft"
   | "processing"
   | "awaiting_review"
@@ -52,4 +52,23 @@ export type CarePlanTask = {
   taskStatus: "pending" | "completed" | "cancelled"
   reviewStatus: "draft" | "approved" | "rejected"
   origin: "ai" | "manual"
+}
+
+export type ApiAppointment = {
+  id: string
+  createdAt: string
+  updatedAt: string
+  sourceType: "text" | "voice"
+  sourceText: string
+  status: RecordStatus
+  draftContent: Record<string, unknown> | null
+  approvedContent: Record<string, unknown> | null
+  aiModel: string | null
+  errorMessage: string | null
+  approvedAt: string | null
+}
+
+export type CreateAppointmentInput = {
+  sourceText: string
+  sourceType: "text" | "voice"
 }

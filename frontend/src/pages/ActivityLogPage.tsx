@@ -2,19 +2,14 @@
 import { History, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DemoDataBadge } from "@/components/shared/DemoDataBadge"
 import { EmptyState } from "@/components/shared/EmptyState"
+import { ErrorState } from "@/components/shared/ErrorState"
+import { LoadingState } from "@/components/shared/LoadingState"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
-import { DEMO_MODE, demoActivity } from "@/lib/demoData"
+import { useActivity } from "@/hooks/useActivity"
 
 const entityLabels: Record<string, string> = {
   appointment_request: "Appointment",
@@ -38,17 +33,16 @@ function capitalise(text: string): string {
 }
 
 export default function ActivityLogPage() {
+  const activityQuery = useActivity()
   const [search, setSearch] = useState("")
   const [entityFilter, setEntityFilter] = useState("all")
 
-  const items = DEMO_MODE ? demoActivity : []
+  const items = activityQuery.data ?? []
   const query = search.trim().toLowerCase()
   const filtered = items.filter((item) => {
     const matchesType = entityFilter === "all" || item.entityType === entityFilter
     const matchesSearch =
-      query === "" ||
-      item.summary.toLowerCase().includes(query) ||
-      item.action.toLowerCase().includes(query)
+      query === "" || item.summary.toLowerCase().includes(query) || item.action.toLowerCase().includes(query)
     return matchesType && matchesSearch
   })
 
@@ -66,7 +60,11 @@ export default function ActivityLogPage() {
       />
 
       <Panel title="Events">
-        {items.length === 0 ? (
+        {activityQuery.isPending ? (
+          <LoadingState rows={5} label="Loading activity" />
+        ) : activityQuery.isError ? (
+          <ErrorState message={activityQuery.error.message} onRetry={() => activityQuery.refetch()} />
+        ) : items.length === 0 ? (
           <EmptyState icon={History} title="No activity yet" description="Actions taken in NexusCare will be recorded here." />
         ) : (
           <div className="space-y-4">
@@ -76,7 +74,7 @@ export default function ActivityLogPage() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search activity…"
+                  placeholder="Search activity..."
                   aria-label="Search activity"
                   className="pl-9"
                 />

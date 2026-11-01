@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query"
+﻿import { useQuery } from "@tanstack/react-query"
 import { useSearchParams } from "react-router"
+import { api } from "@/lib/api"
 import { DEMO_MODE, demoActivity, demoAppointments, demoStats } from "@/lib/demoData"
+import { toAppointmentRequest } from "@/lib/mappers"
 import type { ActivityEntry, AppointmentRequest, DashboardStats } from "@/types"
 
 export type DashboardData = {
@@ -27,25 +29,25 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function fetchDashboard(preview: PreviewState): Promise<DashboardData> {
-  if (!DEMO_MODE) {
-    throw new Error("The backend is not connected yet. It will be added in Phase 5.")
-  }
-  if (preview === "loading") {
-    return new Promise<DashboardData>(() => {})
-  }
-  await wait(600)
-  if (preview === "error") {
-    throw new Error("Simulated error for testing the error state.")
-  }
-  if (preview === "empty") {
-    return emptyData
-  }
+async function fetchLiveDashboard(): Promise<DashboardData> {
+  const [stats, appointments, activity] = await Promise.all([
+    api.getDashboardStats(),
+    api.listAppointments(6),
+    api.listActivity(6),
+  ])
   return {
-    stats: demoStats,
-    recentAppointments: demoAppointments,
-    recentActivity: demoActivity,
+    stats,
+    recentAppointments: appointments.map(toAppointmentRequest),
+    recentActivity: activity,
   }
+}
+
+async function fetchDemoDashboard(preview: PreviewState): Promise<DashboardData> {
+  if (preview === "loading") return new Promise<DashboardData>(() => {})
+  await wait(600)
+  if (preview === "error") throw new Error("Simulated error for testing the error state.")
+  if (preview === "empty") return emptyData
+  return { stats: demoStats, recentAppointments: demoAppointments, recentActivity: demoActivity }
 }
 
 export function useDashboardData() {
@@ -56,7 +58,7 @@ export function useDashboardData() {
 
   return useQuery({
     queryKey: ["dashboard", preview],
-    queryFn: () => fetchDashboard(preview),
+    queryFn: () => (DEMO_MODE ? fetchDemoDashboard(preview) : fetchLiveDashboard()),
     retry: false,
   })
 }

@@ -1,23 +1,31 @@
 ﻿import { ShieldCheck } from "lucide-react"
 import { DemoDataBadge } from "@/components/shared/DemoDataBadge"
+import { EmergencyBanner } from "@/components/shared/EmergencyBanner"
 import { EmptyState } from "@/components/shared/EmptyState"
-import { NoteInputForm } from "@/components/shared/NoteInputForm"
+import { ErrorState } from "@/components/shared/ErrorState"
+import { LoadingState } from "@/components/shared/LoadingState"
+import { NoteInputForm, type NoteSourceType } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
 import { RecentAppointmentsTable } from "@/features/dashboard/RecentAppointmentsTable"
-import { DEMO_MODE, demoAppointments } from "@/lib/demoData"
-import { EmergencyBanner } from "@/components/shared/EmergencyBanner"
+import { useAppointments, useCreateAppointment } from "@/hooks/useAppointments"
+import { DEMO_MODE } from "@/lib/demoData"
 import { mayBeEmergency } from "@/lib/emergency"
 
 const rules = [
   "Missing details are flagged, never invented.",
   "A requested date is not a confirmed booking.",
-  "Vague dates like “next week” are marked for clarification.",
-  "Nothing is saved until a staff member approves it.",
+  'Vague dates like "next week" are marked for clarification.',
+  "Nothing is approved until a staff member reviews it.",
 ]
 
 export default function AppointmentsPage() {
-  const appointments = DEMO_MODE ? demoAppointments : []
+  const appointmentsQuery = useAppointments()
+  const createAppointment = useCreateAppointment()
+
+  async function saveDraft(note: string, sourceType: NoteSourceType) {
+    await createAppointment.mutateAsync({ sourceText: note, sourceType })
+  }
 
   return (
     <div className="space-y-6">
@@ -33,7 +41,9 @@ export default function AppointmentsPage() {
             label="Patient or caregiver note"
             placeholder="e.g. Hi, this is Priya calling for my father (ref PT-1042). He needs a follow-up after his blood test, ideally next Tuesday morning. Please call me back on my mobile."
             helpText="Use fictional details only. Type the note or record it with your voice."
-            submitLabel="Generate request"
+            submitLabel={DEMO_MODE ? "Generate request" : "Save as draft"}
+            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
+            successMessage="Saved as a draft. AI extraction will be added in Phase 6, and nothing is approved until a staff member reviews it."
             enableVoice
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
@@ -52,13 +62,14 @@ export default function AppointmentsPage() {
       </div>
 
       <Panel title="Recent requests" action={<DemoDataBadge />}>
-        {appointments.length > 0 ? (
-          <RecentAppointmentsTable appointments={appointments} />
+        {appointmentsQuery.isPending ? (
+          <LoadingState rows={4} label="Loading appointment requests" />
+        ) : appointmentsQuery.isError ? (
+          <ErrorState message={appointmentsQuery.error.message} onRetry={() => appointmentsQuery.refetch()} />
+        ) : appointmentsQuery.data.length > 0 ? (
+          <RecentAppointmentsTable appointments={appointmentsQuery.data} />
         ) : (
-          <EmptyState
-            title="No appointment requests yet"
-            description="Requests you approve will appear here."
-          />
+          <EmptyState title="No appointment requests yet" description="Saved requests will appear here." />
         )}
       </Panel>
     </div>

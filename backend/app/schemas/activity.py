@@ -1,11 +1,9 @@
-from datetime import datetime
-
-from app.schemas.common import CamelModel
+from app.schemas.common import CamelModel, UtcDatetime
 
 
 class ActivityRead(CamelModel):
     id: str
-    created_at: datetime
+    created_at: UtcDatetime
     entity_type: str
     entity_id: str
     action: str
