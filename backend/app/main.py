@@ -6,6 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import activity, appointments, dashboard, documents, health, records
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
+from app.core.rate_limit import (
+    AI_RATE_LIMIT_PER_MINUTE,
+    AIRateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    SlidingWindowLimiter,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -21,6 +27,13 @@ def create_app() -> FastAPI:
         docs_url=None if is_production else "/docs",
         redoc_url=None,
     )
+
+    # Middleware added later runs first. CORS is added last so that it wraps
+    # everything, including 429 responses, and the browser can read them.
+    limiter = SlidingWindowLimiter(AI_RATE_LIMIT_PER_MINUTE)
+    app.state.ai_rate_limiter = limiter
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(AIRateLimitMiddleware, limiter=limiter)
 
     # Only the configured frontend may call this API from a browser.
     app.add_middleware(

@@ -12,6 +12,14 @@ from app.db.session import get_db
 from app.main import app
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Each test starts with a fresh AI rate-limit window."""
+    app.state.ai_rate_limiter.reset()
+    yield
+    app.state.ai_rate_limiter.reset()
+
+
 @pytest.fixture
 def db_session() -> Generator[Session, None, None]:
     engine = create_engine(
