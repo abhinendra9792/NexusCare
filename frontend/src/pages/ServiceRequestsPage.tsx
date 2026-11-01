@@ -4,6 +4,8 @@ import { NoteInputForm } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
 import { RecordListPanel, RecordRow } from "@/components/shared/RecordListPanel"
+import { CATEGORIES } from "@/features/service-requests/ServiceRequestReviewCard"
+import { ServiceRequestReviewQueue } from "@/features/service-requests/ServiceRequestReviewQueue"
 import { useCreateServiceRequest, useServiceRequests } from "@/hooks/useRecords"
 import { DEMO_MODE } from "@/lib/demoData"
 import { mayBeEmergency } from "@/lib/emergency"
@@ -17,11 +19,13 @@ const departments = [
   { name: "Other / Needs Review", description: "Anything unclear; a person decides" },
 ]
 
+const categoryLabel = (value: string) => CATEGORIES.find((option) => option.value === value)?.label ?? value
+
 export default function ServiceRequestsPage() {
   const requestsQuery = useServiceRequests()
   const createRequest = useCreateServiceRequest()
 
-  async function saveDraft(note: string) {
+  async function classify(note: string) {
     await createRequest.mutateAsync(note)
   }
 
@@ -39,9 +43,9 @@ export default function ServiceRequestsPage() {
             label="Inquiry message"
             placeholder="e.g. I was charged twice for my visit on 12 October. Can someone check my invoice?"
             helpText="Use fictional details only. Staff can correct the suggested department before approving."
-                        submitLabel={DEMO_MODE ? "Classify inquiry" : "Classify with AI"}
-            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-                        successMessage="AI classification ready. It is awaiting review below, and staff approve every routing decision."
+            submitLabel={DEMO_MODE ? "Classify inquiry" : "Classify with AI"}
+            onSubmitNote={DEMO_MODE ? undefined : classify}
+            successMessage="AI classification ready. Review it in the queue below. Staff approve every routing decision."
             minLength={10}
             renderWarning={(text) => (mayBeEmergency(text) ? <EmergencyBanner /> : null)}
           />
@@ -62,8 +66,12 @@ export default function ServiceRequestsPage() {
         </Panel>
       </div>
 
+      <Panel title="Review queue">
+        <ServiceRequestReviewQueue />
+      </Panel>
+
       <RecordListPanel
-        title="Service requests"
+        title="All service requests"
         query={requestsQuery}
         icon={Inbox}
         emptyTitle="No service requests yet"
@@ -74,12 +82,19 @@ export default function ServiceRequestsPage() {
             createdAt={item.createdAt}
             status={item.status}
             badges={
-              item.possibleEmergency ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 ring-1 ring-inset ring-red-200">
-                  <Siren className="h-3 w-3" aria-hidden="true" />
-                  Possible emergency
-                </span>
-              ) : null
+              <>
+                {item.possibleEmergency && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 ring-1 ring-inset ring-red-200">
+                    <Siren className="h-3 w-3" aria-hidden="true" />
+                    Possible emergency
+                  </span>
+                )}
+                {item.category && (
+                  <span className="inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700 ring-1 ring-inset ring-teal-200">
+                    {categoryLabel(item.category)}
+                  </span>
+                )}
+              </>
             }
           />
         )}
