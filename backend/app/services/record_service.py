@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.db.enums import RecordStatus
+from app.db.models import utcnow
 from app.services.activity_service import log_activity
 from app.services.ai_service import AIError, AIService
 from app.services.status_service import apply_transition
@@ -56,6 +57,75 @@ def cancel_record(db: Session, model, record_id: str, *, entity_type: str, label
     db.commit()
     db.refresh(record)
     return record
+
+
+# ---------- Review and approval (records with draft_content) ----------
+
+
+def update_draft(db: Session, model, record_id: str, draft: BaseModel, *, entity_type: str, label: str):
+    """Save a reviewer's edits. Only allowed while the record awaits review."""
+    record = get_record(db, model, record_id, label=label)
+    if record.status != RecordStatus.AWAITING_REVIEW:
+        raise AppError("NOT_EDITABLE", "Only drafts that are awaiting review can be edited.", 409)
+    record.draft_content = draft.model_dump(mode="json")
+    log_activity(
+        db,
+        entity_type=entity_type,
+        entity_id=record.id,
+        action="edited",
+        summary=f"{label} draft edited by reviewer",
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def approve_record(
+    db: Session,
+    model,
+    record_id: str,
+    *,
+    entity_type: str,
+    label: str,
+    on_approve: Callable[[object], None] | None = None,
+):
+    """Copy the reviewed draft into approved_content. Approved records are never overwritten."""
+    record = get_record(db, model, record_id, label=label)
+    if record.draft_content is None:
+        raise AppError("NOTHING_TO_APPROVE", "There is no draft to approve.", 409)
+    apply_transition(
+        db,
+        record,
+        RecordStatus.APPROVED,
+        entity_type=entity_type,
+        action="approved",
+        summary=f"{label} approved",
+    )
+    record.approved_content = dict(record.draft_content)
+    record.approved_at = utcnow()
+    if on_approve:
+        on_approve(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def reject_record(db: Session, model, record_id: str, *, entity_type: str, label: str):
+    record = get_record(db, model, record_id, label=label)
+    apply_transition(
+        db,
+        record,
+        RecordStatus.REJECTED,
+        entity_type=entity_type,
+        action="rejected",
+        summary=f"{label} rejected",
+    )
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+# ---------- AI generation ----------
 
 
 def _store_as_draft(record, result: BaseModel) -> None:

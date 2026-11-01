@@ -4,6 +4,7 @@ from typing import Annotated
 from pydantic import StringConstraints
 
 from app.db.enums import RecordStatus, ServiceCategory, TaskOrigin, TaskPriority, TaskReviewStatus, TaskStatus
+from app.schemas.ai_outputs import ServiceClassification, VisitSummaryDraft
 from app.schemas.appointments import SourceText
 from app.schemas.common import CamelModel, UtcDatetime
 
@@ -22,6 +23,18 @@ class ServiceRequestCreate(CamelModel):
 class CarePlanCreate(CamelModel):
     source_text: SourceText
     title: Title | None = None
+
+
+class VisitSummaryDraftUpdate(CamelModel):
+    """A reviewer's edited summary. It must still match the AI output schema."""
+
+    draft_content: VisitSummaryDraft
+
+
+class ServiceRequestDraftUpdate(CamelModel):
+    """A reviewer's corrected classification (category, department, urgency...)."""
+
+    draft_content: ServiceClassification
 
 
 class RecordReadBase(CamelModel):

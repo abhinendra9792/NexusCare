@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.emergency import may_be_emergency
 from app.db import models
-from app.db.enums import RecordStatus, TaskOrigin, TaskPriority, TaskReviewStatus, TaskStatus
+from app.db.enums import RecordStatus, ServiceCategory, TaskOrigin, TaskPriority, TaskReviewStatus, TaskStatus
 from app.db.session import get_db
 from app.prompts import care_plan as care_prompt
 from app.prompts import service_request as service_prompt
@@ -16,8 +16,10 @@ from app.schemas.records import (
     CarePlanCreate,
     CarePlanRead,
     ServiceRequestCreate,
+    ServiceRequestDraftUpdate,
     ServiceRequestRead,
     VisitSummaryCreate,
+    VisitSummaryDraftUpdate,
     VisitSummaryRead,
 )
 from app.services import record_service as svc
@@ -84,6 +86,21 @@ def retry_visit_summary(
     return _run_visit_ai(db, record, ai)
 
 
+@visit_summaries_router.patch("/{record_id}", response_model=VisitSummaryRead)
+def update_visit_summary(record_id: UUID, payload: VisitSummaryDraftUpdate, db: Session = Depends(get_db)):
+    return svc.update_draft(db, models.VisitSummary, str(record_id), payload.draft_content, **VISIT)
+
+
+@visit_summaries_router.post("/{record_id}/approve", response_model=VisitSummaryRead)
+def approve_visit_summary(record_id: UUID, db: Session = Depends(get_db)):
+    return svc.approve_record(db, models.VisitSummary, str(record_id), **VISIT)
+
+
+@visit_summaries_router.post("/{record_id}/reject", response_model=VisitSummaryRead)
+def reject_visit_summary(record_id: UUID, db: Session = Depends(get_db)):
+    return svc.reject_record(db, models.VisitSummary, str(record_id), **VISIT)
+
+
 # ---------- Service requests ----------
 service_requests_router = APIRouter(prefix="/api/v1/service-requests", tags=["service requests"])
 SERVICE = {"entity_type": "service_request", "label": "Service request"}
@@ -116,6 +133,14 @@ def _run_service_ai(db: Session, record: models.ServiceRequest, ai: AIService) -
         apply_result=_store_service_result,
         **SERVICE,
     )
+
+
+def _set_approved_category(record: models.ServiceRequest) -> None:
+    """Store the staff-confirmed category in its own column for filtering and dashboard stats.
+
+    possible_emergency is deliberately left alone: a reviewer edit can never clear it.
+    """
+    record.category = ServiceCategory(record.approved_content["category"])
 
 
 @service_requests_router.post("", response_model=ServiceRequestRead, status_code=201)
@@ -156,6 +181,24 @@ def retry_service_request(
 ):
     record = svc.get_record(db, models.ServiceRequest, str(record_id), label=SERVICE["label"])
     return _run_service_ai(db, record, ai)
+
+
+@service_requests_router.patch("/{record_id}", response_model=ServiceRequestRead)
+def update_service_request(record_id: UUID, payload: ServiceRequestDraftUpdate, db: Session = Depends(get_db)):
+    """Staff correct the category, department, or urgency before approving."""
+    return svc.update_draft(db, models.ServiceRequest, str(record_id), payload.draft_content, **SERVICE)
+
+
+@service_requests_router.post("/{record_id}/approve", response_model=ServiceRequestRead)
+def approve_service_request(record_id: UUID, db: Session = Depends(get_db)):
+    return svc.approve_record(
+        db, models.ServiceRequest, str(record_id), on_approve=_set_approved_category, **SERVICE
+    )
+
+
+@service_requests_router.post("/{record_id}/reject", response_model=ServiceRequestRead)
+def reject_service_request(record_id: UUID, db: Session = Depends(get_db)):
+    return svc.reject_record(db, models.ServiceRequest, str(record_id), **SERVICE)
 
 
 # ---------- Care plans ----------
