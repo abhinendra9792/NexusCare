@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -7,6 +8,8 @@ from app.core.emergency import may_be_emergency
 from app.db import models
 from app.db.enums import RecordStatus
 from app.db.session import get_db
+from app.prompts import visit_summary as visit_prompt
+from app.schemas.ai_outputs import VisitSummaryDraft
 from app.schemas.records import (
     CarePlanCreate,
     CarePlanRead,
@@ -16,6 +19,7 @@ from app.schemas.records import (
     VisitSummaryRead,
 )
 from app.services import record_service as svc
+from app.services.ai_service import AIService, get_ai_service
 
 StatusFilter = Query(default=None, alias="status")
 Limit = Query(default=50, ge=1, le=200)
@@ -43,6 +47,39 @@ def get_visit_summary(record_id: UUID, db: Session = Depends(get_db)):
 @visit_summaries_router.post("/{record_id}/cancel", response_model=VisitSummaryRead)
 def cancel_visit_summary(record_id: UUID, db: Session = Depends(get_db)):
     return svc.cancel_record(db, models.VisitSummary, str(record_id), **VISIT)
+
+
+def _run_visit_ai(db: Session, record: models.VisitSummary, ai: AIService) -> models.VisitSummary:
+    return svc.run_ai_generation(
+        db,
+        record,
+        ai,
+        schema=VisitSummaryDraft,
+        system_instruction=visit_prompt.SYSTEM_INSTRUCTION,
+               prompt=visit_prompt.build_prompt(record.source_text, date.today()),
+        prompt_version=visit_prompt.PROMPT_VERSION,
+        **VISIT,
+    )
+
+
+@visit_summaries_router.post("/generate", response_model=VisitSummaryRead, status_code=201)
+def generate_visit_summary(
+    payload: VisitSummaryCreate,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    record = svc.create_record(db, models.VisitSummary(source_text=payload.source_text), **VISIT)
+    return _run_visit_ai(db, record, ai)
+
+
+@visit_summaries_router.post("/{record_id}/retry", response_model=VisitSummaryRead)
+def retry_visit_summary(
+    record_id: UUID,
+    db: Session = Depends(get_db),
+    ai: AIService = Depends(get_ai_service),
+):
+    record = svc.get_record(db, models.VisitSummary, str(record_id), label=VISIT["label"])
+    return _run_visit_ai(db, record, ai)
 
 
 # ---------- Service requests ----------
