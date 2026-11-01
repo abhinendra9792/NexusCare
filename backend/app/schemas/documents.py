@@ -24,3 +24,12 @@ class DocumentRead(CamelModel):
     ai_model: str | None
     error_message: str | None
     items: list[ExtractedItemRead]
+
+    
+
+class DocumentItemUpdate(CamelModel):
+    """A reviewer's edited item. It is checked against the item's own schema on the server."""
+
+    draft_content: dict
+
+    

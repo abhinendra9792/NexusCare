@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError
 from app.db import models
 from app.db.session import get_db
-from app.schemas.documents import DocumentRead
+from app.schemas.documents import DocumentItemUpdate, DocumentRead
 from app.services import document_service
 from app.services.ai_service import AIService, get_ai_service
 
@@ -48,3 +48,19 @@ def get_document(document_id: UUID, db: Session = Depends(get_db)):
     if job is None:
         raise AppError("NOT_FOUND", "Document not found.", 404)
     return job
+
+
+@router.patch("/items/{item_id}", response_model=DocumentRead)
+def update_document_item(item_id: UUID, payload: DocumentItemUpdate, db: Session = Depends(get_db)):
+    """Edit one extracted item. Only allowed while it is awaiting review."""
+    return document_service.update_item(db, str(item_id), payload.draft_content)
+
+
+@router.post("/items/{item_id}/approve", response_model=DocumentRead)
+def approve_document_item(item_id: UUID, db: Session = Depends(get_db)):
+    return document_service.approve_item(db, str(item_id))
+
+
+@router.post("/items/{item_id}/reject", response_model=DocumentRead)
+def reject_document_item(item_id: UUID, db: Session = Depends(get_db)):
+    return document_service.reject_item(db, str(item_id))

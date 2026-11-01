@@ -1,26 +1,38 @@
 from dataclasses import dataclass
 from datetime import date
+from typing import get_args
 
 import pymupdf
 from fastapi import UploadFile
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.core.errors import AppError
 from app.db import models
 from app.db.enums import DocumentItemType, RecordStatus
+from app.db.models import utcnow
 from app.prompts import document as document_prompt
 from app.schemas.ai_outputs import DocumentExtraction
 from app.services import record_service
 from app.services.activity_service import log_activity
 from app.services.ai_service import AIService
+from app.services.status_service import apply_transition
 
 ENTITY_TYPE = "document_job"
+ITEM_ENTITY = "document_item"
 LABEL = "Document"
 MAX_PAGES = 20
 PREVIEW_CHARS = 1000
 MAX_AI_CHARS = 30_000
 PDF_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
+
+# The schema each item type must match when a reviewer edits it, taken from the
+# AI output schema itself (DocumentExtraction.appointments is list[<item schema>]).
+ITEM_SCHEMAS = {
+    DocumentItemType.APPOINTMENT: get_args(DocumentExtraction.model_fields["appointments"].annotation)[0],
+    DocumentItemType.FOLLOW_UP: get_args(DocumentExtraction.model_fields["follow_up_actions"].annotation)[0],
+}
 
 
 @dataclass
@@ -169,3 +181,61 @@ async def generate_document_job(
     )
     _ = job.items
     return job
+
+
+# ---------- Item review ----------
+
+
+def _get_item(db: Session, item_id: str) -> models.ExtractedDocumentItem:
+    item = db.get(models.ExtractedDocumentItem, item_id)
+    if item is None:
+        raise AppError("NOT_FOUND", "Document item not found.", 404)
+    return item
+
+
+def _job_with_items(db: Session, job: models.DocumentJob) -> models.DocumentJob:
+    db.refresh(job)
+    _ = job.items
+    return job
+
+
+def update_item(db: Session, item_id: str, draft: dict) -> models.DocumentJob:
+    """Save a reviewer's edits to one item. The edit must still match the item's schema."""
+    item = _get_item(db, item_id)
+    if item.status != RecordStatus.AWAITING_REVIEW:
+        raise AppError("NOT_EDITABLE", "Only items that are awaiting review can be edited.", 409)
+
+    schema = ITEM_SCHEMAS[DocumentItemType(item.item_type)]
+    try:
+        validated = schema.model_validate(draft)
+    except ValidationError:
+        raise AppError(
+            "INVALID_ITEM",
+            "The edited item is not valid. Check that dates use YYYY-MM-DD and times use HH:MM.",
+            422,
+        ) from None
+
+    item.draft_content = validated.model_dump(mode="json")
+    log_activity(db, entity_type=ITEM_ENTITY, entity_id=item.id, action="edited", summary="Document item edited by reviewer")
+    db.commit()
+    return _job_with_items(db, item.document_job)
+
+
+def approve_item(db: Session, item_id: str) -> models.DocumentJob:
+    item = _get_item(db, item_id)
+    apply_transition(
+        db, item, RecordStatus.APPROVED, entity_type=ITEM_ENTITY, action="approved", summary="Document item approved"
+    )
+    item.approved_content = dict(item.draft_content)
+    item.approved_at = utcnow()
+    db.commit()
+    return _job_with_items(db, item.document_job)
+
+
+def reject_item(db: Session, item_id: str) -> models.DocumentJob:
+    item = _get_item(db, item_id)
+    apply_transition(
+        db, item, RecordStatus.REJECTED, entity_type=ITEM_ENTITY, action="rejected", summary="Document item rejected"
+    )
+    db.commit()
+    return _job_with_items(db, item.document_job)
