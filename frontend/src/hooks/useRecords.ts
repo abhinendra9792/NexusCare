@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
 import { DEMO_MODE } from "@/lib/demoData"
+import type { ServiceClassificationDraft, VisitSummaryDraft } from "@/types"
 
 async function refreshAfterSave(queryClient: QueryClient, key: string) {
   await Promise.all([
@@ -10,50 +11,93 @@ async function refreshAfterSave(queryClient: QueryClient, key: string) {
   ])
 }
 
+function useRefresh(key: string) {
+  const queryClient = useQueryClient()
+  return () => refreshAfterSave(queryClient, key)
+}
+
+// ---------- Visit summaries ----------
+
 export function useVisitSummaries() {
   return useQuery({ queryKey: ["visit-summaries"], queryFn: () => api.listVisitSummaries(), enabled: !DEMO_MODE, retry: 1 })
 }
 
 export function useCreateVisitSummary() {
-  const queryClient = useQueryClient()
+  const refresh = useRefresh("visit-summaries")
   return useMutation({
     mutationFn: (sourceText: string) => api.createVisitSummary(sourceText),
-    onSuccess: () => refreshAfterSave(queryClient, "visit-summaries"),
+    // Refresh even when the AI fails: the record is still saved, marked as failed.
+    onSettled: () => refresh(),
   })
 }
+
+export function useVisitSummaryReview() {
+  const refresh = useRefresh("visit-summaries")
+  return {
+    save: useMutation({
+      mutationFn: ({ id, draft }: { id: string; draft: VisitSummaryDraft }) => api.updateVisitSummary(id, draft),
+      onSettled: () => refresh(),
+    }),
+    approve: useMutation({ mutationFn: (id: string) => api.approveVisitSummary(id), onSettled: () => refresh() }),
+    reject: useMutation({ mutationFn: (id: string) => api.rejectVisitSummary(id), onSettled: () => refresh() }),
+    retry: useMutation({ mutationFn: (id: string) => api.retryVisitSummary(id), onSettled: () => refresh() }),
+    cancel: useMutation({ mutationFn: (id: string) => api.cancelVisitSummary(id), onSettled: () => refresh() }),
+  }
+}
+
+// ---------- Service requests ----------
 
 export function useServiceRequests() {
   return useQuery({ queryKey: ["service-requests"], queryFn: () => api.listServiceRequests(), enabled: !DEMO_MODE, retry: 1 })
 }
 
 export function useCreateServiceRequest() {
-  const queryClient = useQueryClient()
+  const refresh = useRefresh("service-requests")
   return useMutation({
     mutationFn: (sourceText: string) => api.createServiceRequest(sourceText),
-    onSuccess: () => refreshAfterSave(queryClient, "service-requests"),
+    onSettled: () => refresh(),
   })
 }
+
+export function useServiceRequestReview() {
+  const refresh = useRefresh("service-requests")
+  return {
+    save: useMutation({
+      mutationFn: ({ id, draft }: { id: string; draft: ServiceClassificationDraft }) =>
+        api.updateServiceRequest(id, draft),
+      onSettled: () => refresh(),
+    }),
+    approve: useMutation({ mutationFn: (id: string) => api.approveServiceRequest(id), onSettled: () => refresh() }),
+    reject: useMutation({ mutationFn: (id: string) => api.rejectServiceRequest(id), onSettled: () => refresh() }),
+    retry: useMutation({ mutationFn: (id: string) => api.retryServiceRequest(id), onSettled: () => refresh() }),
+    cancel: useMutation({ mutationFn: (id: string) => api.cancelServiceRequest(id), onSettled: () => refresh() }),
+  }
+}
+
+// ---------- Care plans ----------
 
 export function useCarePlans() {
   return useQuery({ queryKey: ["care-plans"], queryFn: () => api.listCarePlans(), enabled: !DEMO_MODE, retry: 1 })
 }
 
 export function useCreateCarePlan() {
-  const queryClient = useQueryClient()
+  const refresh = useRefresh("care-plans")
   return useMutation({
     mutationFn: (input: { sourceText: string; title?: string }) => api.createCarePlan(input),
-    onSuccess: () => refreshAfterSave(queryClient, "care-plans"),
+    onSettled: () => refresh(),
   })
 }
+
+// ---------- Documents ----------
 
 export function useDocuments() {
   return useQuery({ queryKey: ["documents"], queryFn: () => api.listDocuments(), enabled: !DEMO_MODE, retry: 1 })
 }
 
 export function useUploadDocument() {
-  const queryClient = useQueryClient()
+  const refresh = useRefresh("documents")
   return useMutation({
     mutationFn: (file: File) => api.uploadDocument(file),
-    onSuccess: () => refreshAfterSave(queryClient, "documents"),
+    onSettled: () => refresh(),
   })
 }

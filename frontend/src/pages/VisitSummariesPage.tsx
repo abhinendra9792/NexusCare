@@ -3,6 +3,7 @@ import { NoteInputForm } from "@/components/shared/NoteInputForm"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
 import { RecordListPanel, RecordRow } from "@/components/shared/RecordListPanel"
+import { VisitSummaryReviewQueue } from "@/features/summaries/VisitSummaryReviewQueue"
 import { useCreateVisitSummary, useVisitSummaries } from "@/hooks/useRecords"
 import { DEMO_MODE } from "@/lib/demoData"
 
@@ -19,7 +20,7 @@ export default function VisitSummariesPage() {
   const summariesQuery = useVisitSummaries()
   const createSummary = useCreateVisitSummary()
 
-  async function saveDraft(note: string) {
+  async function generateDraft(note: string) {
     await createSummary.mutateAsync(note)
   }
 
@@ -37,9 +38,10 @@ export default function VisitSummariesPage() {
             label="Notes from the visit"
             placeholder="e.g. PT-0931 attended a routine review. Reported sleeping better since the last visit. Asked about repeat physiotherapy sessions. Wants last month's report sent by email."
             helpText="Use fictional details only. Only information in these notes will be used."
-                        submitLabel={DEMO_MODE ? "Generate summary" : "Generate with AI"}
-            onSubmitNote={DEMO_MODE ? undefined : saveDraft}
-            successMessage="AI summary draft ready. It is awaiting review below, and nothing is approved until a staff member checks it."            enableVoice
+            submitLabel={DEMO_MODE ? "Generate summary" : "Generate with AI"}
+            onSubmitNote={DEMO_MODE ? undefined : generateDraft}
+            successMessage="AI summary draft ready. Review it in the queue below. Nothing is approved until a staff member checks it."
+            enableVoice
           />
         </Panel>
 
@@ -73,8 +75,12 @@ export default function VisitSummariesPage() {
         </Panel>
       </div>
 
+      <Panel title="Review queue">
+        <VisitSummaryReviewQueue />
+      </Panel>
+
       <RecordListPanel
-        title="Saved summaries"
+        title="All summaries"
         query={summariesQuery}
         icon={FileText}
         emptyTitle="No summaries yet"

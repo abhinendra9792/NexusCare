@@ -130,7 +130,14 @@ export const api = {
       method: "POST",
       timeoutMs: AI_TIMEOUT_MS,
     }),
-
+      updateVisitSummary: (recordId: string, draftContent: Record<string, unknown>) =>
+    apiRequest<ApiVisitSummary>(`/api/v1/visit-summaries/${id(recordId)}`, { method: "PATCH", body: { draftContent } }),
+  approveVisitSummary: (recordId: string) =>
+    apiRequest<ApiVisitSummary>(`/api/v1/visit-summaries/${id(recordId)}/approve`, { method: "POST" }),
+  rejectVisitSummary: (recordId: string) =>
+    apiRequest<ApiVisitSummary>(`/api/v1/visit-summaries/${id(recordId)}/reject`, { method: "POST" }),
+  cancelVisitSummary: (recordId: string) =>
+    apiRequest<ApiVisitSummary>(`/api/v1/visit-summaries/${id(recordId)}/cancel`, { method: "POST" }),
   // ---------- Service requests ----------
   listServiceRequests: (limit = 50) => apiRequest<ApiServiceRequest[]>(`/api/v1/service-requests?limit=${limit}`),
   /** Runs the emergency keyword check, saves the inquiry, then runs AI classification. */
@@ -145,7 +152,14 @@ export const api = {
       method: "POST",
       timeoutMs: AI_TIMEOUT_MS,
     }),
-
+      updateServiceRequest: (recordId: string, draftContent: Record<string, unknown>) =>
+    apiRequest<ApiServiceRequest>(`/api/v1/service-requests/${id(recordId)}`, { method: "PATCH", body: { draftContent } }),
+  approveServiceRequest: (recordId: string) =>
+    apiRequest<ApiServiceRequest>(`/api/v1/service-requests/${id(recordId)}/approve`, { method: "POST" }),
+  rejectServiceRequest: (recordId: string) =>
+    apiRequest<ApiServiceRequest>(`/api/v1/service-requests/${id(recordId)}/reject`, { method: "POST" }),
+  cancelServiceRequest: (recordId: string) =>
+    apiRequest<ApiServiceRequest>(`/api/v1/service-requests/${id(recordId)}/cancel`, { method: "POST" }),
   // ---------- Care plans ----------
   listCarePlans: (limit = 50) => apiRequest<ApiCarePlan[]>(`/api/v1/care-plans?limit=${limit}`),
   /** Saves the progress notes and runs AI task generation. Tasks start as drafts. */

@@ -162,3 +162,31 @@ export type AppointmentDraft = {
   missing_information: string[]
   uncertainty_notes: string[]
 }
+
+export type FollowUpOrigin = "mentioned" | "suggested"
+
+/** The AI draft for a visit summary (keys match the backend schema). */
+export type VisitSummaryDraft = {
+  visit_purpose: string | null
+  key_points: string[]
+  reported_facts: { fact: string; source_excerpt: string | null }[]
+  follow_up_actions: { action: string; origin: FollowUpOrigin }[]
+  missing_information: string[]
+  items_requiring_verification: string[]
+}
+
+export type Urgency = "low" | "normal" | "high"
+export type Confidence = "low" | "medium" | "high"
+
+/** The AI draft for a service request classification (keys match the backend schema). */
+export type ServiceClassificationDraft = {
+  summary: string
+  category: ServiceCategory
+  suggested_department: string
+  urgency: Urgency
+  urgency_reason: string | null
+  explanation: string
+  missing_information: string[]
+  confidence: Confidence
+  possible_emergency: boolean
+}
