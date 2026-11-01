@@ -136,4 +136,206 @@ Same columns as `appointment_requests`, except `source_type` is always `text`.
 | Column | Type | Notes |
 |--------|------|-------|
 | source_text | text | Inquiry |
-| draft_content | JSON
+| draft_content | JSON | Full AI classification |
+| approved_content | JSON, null | |
+| category | enum, null | Approved category (for filtering/stats) |
+| possible_emergency | bool | Set by keyword check **and/or** AI |
+| status | enum | Lifecycle status |
+| ai_model, ai_metadata, error_message, approved_at | | As above |
+
+### 4.8 `activity_logs`
+| Column | Type | Notes |
+|--------|------|-------|
+| entity_type | string | e.g. `appointment_request` |
+| entity_id | UUID | |
+| action | string | `created`, `approved`, `rejected`, … |
+| from_status | string, null | |
+| to_status | string, null | |
+| summary | string | Short, **no patient details** |
+
+---
+
+## 5. AI Output Schemas (Pydantic)
+
+### A. AppointmentExtraction
+- `patient_reference`: str | null
+- `requested_date`: str (YYYY-MM-DD) | null
+- `requested_time`: str (HH:MM) | null
+- `date_original_text`: str | null — e.g. "next Tuesday"
+- `date_is_ambiguous`: bool
+- `reason`: str | null
+- `request_type`: `new` | `follow_up` | `reschedule` | `cancellation` | `other`
+- `contact_preference`: `phone` | `email` | `sms` | `any` | null
+- `additional_notes`: str | null
+- `missing_information`: list[str]
+- `uncertainty_notes`: list[str]
+
+### B. DocumentExtraction
+- `appointments`: list of { `date`, `time`, `department_or_provider`, `location`, `purpose`, `source_excerpt` }
+- `follow_up_actions`: list of { `action`, `due_date`, `source_excerpt` }
+- `missing_information`: list[str]
+
+### C. VisitSummaryDraft
+- `visit_purpose`: str | null
+- `key_points`: list[str]
+- `reported_facts`: list of { `fact`, `source_excerpt` }
+- `follow_up_actions`: list of { `action`, `origin`: `mentioned` | `suggested` }
+- `missing_information`: list[str]
+- `items_requiring_verification`: list[str]
+
+### D. CarePlanDraft
+- `tasks`: list of { `description`, `source_reason`, `suggested_due_date` | null, `priority` | null }
+- `notes`: str | null
+
+### E. ServiceClassification
+- `summary`: str
+- `category`: `appointment_desk` | `billing` | `medical_records` | `technical_support` | `general_support` | `other_needs_review`
+- `suggested_department`: str
+- `urgency`: `low` | `normal` | `high` (administrative indicators only)
+- `urgency_reason`: str | null
+- `explanation`: str
+- `missing_information`: list[str]
+- `confidence`: `low` | `medium` | `high`
+- `possible_emergency`: bool
+
+**Emergency rule:** A backend keyword check runs *before* the AI call. If it or the
+AI flags a possible emergency, the UI shows: *"If this is a medical emergency,
+contact your local emergency services immediately (India: 112)."*
+
+---
+
+## 6. API Endpoints (`/api/v1`)
+
+### System
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Health check (outside `/api/v1`) |
+| GET | `/dashboard/stats` | Counts for dashboard cards & chart |
+| GET | `/activity` | Activity log (paginated) |
+
+### Pattern used by A, C, E (appointments, visit-summaries, service-requests)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/{resource}/generate` | Create record + run AI → `awaiting_review` |
+| GET | `/{resource}` | List (filter by status) |
+| GET | `/{resource}/{id}` | Get one |
+| PATCH | `/{resource}/{id}` | Edit draft (only `awaiting_review`) |
+| POST | `/{resource}/{id}/approve` | Approve |
+| POST | `/{resource}/{id}/reject` | Reject |
+| POST | `/{resource}/{id}/cancel` | Cancel |
+| POST | `/{resource}/{id}/retry` | Re-run AI (from `failed` or `awaiting_review`) |
+
+### B. Documents
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/documents` | Upload PDF (multipart) → extract → AI |
+| GET | `/documents` | List jobs |
+| GET | `/documents/{id}` | Job + extracted items |
+| PATCH | `/documents/items/{item_id}` | Edit an item |
+| POST | `/documents/items/{item_id}/approve` | Approve item |
+| POST | `/documents/items/{item_id}/reject` | Reject item |
+
+### D. Care Plans
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/care-plans/generate` | Create plan + AI tasks |
+| GET | `/care-plans` | List |
+| GET | `/care-plans/{id}` | Plan + tasks |
+| POST | `/care-plans/{id}/tasks` | Add manual task |
+| PATCH | `/care-plans/tasks/{task_id}` | Edit / complete / reopen |
+| DELETE | `/care-plans/tasks/{task_id}` | Remove (draft tasks only) |
+| POST | `/care-plans/tasks/{task_id}/approve` | Approve task |
+| POST | `/care-plans/tasks/{task_id}/reject` | Reject task |
+| POST | `/care-plans/{id}/approve` | Approve plan (all tasks reviewed) |
+
+### Error format (all endpoints)
+```json
+{ "error": { "code": "INVALID_TRANSITION", "message": "Cannot approve a rejected record." } }
+```
+
+| Situation | Status |
+|-----------|--------|
+| Invalid input | 422 |
+| Not found | 404 |
+| Invalid status transition | 409 |
+| File too large | 413 |
+| Unsupported file type | 415 |
+| Rate limited | 429 |
+| AI provider failure | 502 |
+| AI timeout | 504 |
+
+---
+
+## 7. Limits
+
+| Limit | Value |
+|-------|-------|
+| Text input | 5,000 characters |
+| PDF size | `MAX_UPLOAD_SIZE_MB` (default 5 MB) |
+| PDF pages | 20 |
+| Extracted text sent to AI | 30,000 characters (after cleanup) |
+| AI timeout | 30 seconds |
+| AI retries | Max 2, transient errors only (timeouts, 429, 5xx) |
+
+---
+
+## 8. Project Structure
+
+```
+NexusCare/
+├── frontend/                 React + Vite + TypeScript
+│   └── src/
+│       ├── app/              Router, providers
+│       ├── components/       layout/, ui/, shared/
+│       ├── pages/            One file per sidebar page
+│       ├── features/         appointments/, documents/, summaries/,
+│       │                     care-plans/, service-requests/
+│       ├── lib/              api.ts, validation.ts, demoData.ts
+│       ├── hooks/
+│       └── types/
+├── backend/                  FastAPI + SQLAlchemy
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── core/             config.py, security.py, errors.py
+│   │   ├── db/               session.py, models.py
+│   │   ├── schemas/          Request/response + AI output schemas
+│   │   ├── api/              One router per module
+│   │   ├── services/         ai_service.py + one service per module
+│   │   └── prompts/          One prompt template per module
+│   ├── tests/
+│   ├── alembic/
+│   ├── requirements.txt
+│   └── .env.example
+├── docs/
+│   └── PLAN.md
+└── README.md
+```
+
+---
+
+## 9. Security Checklist
+- Gemini key lives only in `backend/.env`, never in frontend code.
+- CORS allows only `FRONTEND_ORIGIN`.
+- PDF validation: extension + MIME type + magic bytes (`%PDF`) + size + page count.
+- Uploads saved with random names in a temp folder and deleted after extraction.
+- Logs contain IDs and actions only, never notes, document text, or keys.
+- Generic error messages for users; details only in server logs (without sensitive data).
+- UI banner: **"Local demo — fictional data only. Not for clinical use."**
+
+---
+
+## 10. Phase Roadmap
+
+| Phase | Deliverable |
+|-------|-------------|
+| 0 | Tools installed, repo initialised ✅ |
+| 1 | This plan |
+| 2 | Frontend shell: sidebar, header, routing, responsive |
+| 3 | All pages + forms with labelled demo data |
+| 4 | FastAPI, models, migrations, health check |
+| 5 | Frontend ↔ backend CRUD, status transitions, activity log |
+| 6 | Gemini service, prompts, schemas, PDF pipeline |
+| 7 | Review & approval UI for all 5 modules |
+| 8 | Rate limiting, log audit, upload cleanup |
+| 9 | Backend, frontend, and integration tests |
+| 10 | README, deployment, demo video |
