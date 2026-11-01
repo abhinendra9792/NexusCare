@@ -202,5 +202,10 @@ export const api = {
       body: form,
       timeoutMs: AI_TIMEOUT_MS,
     })
-  },
+  },  updateDocumentItem: (itemId: string, draftContent: Record<string, unknown>) =>
+    apiRequest<ApiDocument>(`/api/v1/documents/items/${id(itemId)}`, { method: "PATCH", body: { draftContent } }),
+  approveDocumentItem: (itemId: string) =>
+    apiRequest<ApiDocument>(`/api/v1/documents/items/${id(itemId)}/approve`, { method: "POST" }),
+  rejectDocumentItem: (itemId: string) =>
+    apiRequest<ApiDocument>(`/api/v1/documents/items/${id(itemId)}/reject`, { method: "POST" }),
 }

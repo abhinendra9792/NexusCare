@@ -127,3 +127,19 @@ export function useCarePlanActions() {
     rejectTask: useMutation({ mutationFn: (taskId: string) => api.rejectCarePlanTask(taskId), ...settle }),
   }
 }
+
+// ---------- Document item review ----------
+
+export function useDocumentItemActions() {
+  const refresh = useRefresh("documents")
+  const settle = { onSettled: () => refresh() }
+  return {
+    save: useMutation({
+      mutationFn: ({ itemId, draft }: { itemId: string; draft: Record<string, unknown> }) =>
+        api.updateDocumentItem(itemId, draft),
+      ...settle,
+    }),
+    approve: useMutation({ mutationFn: (itemId: string) => api.approveDocumentItem(itemId), ...settle }),
+    reject: useMutation({ mutationFn: (itemId: string) => api.rejectDocumentItem(itemId), ...settle }),
+  }
+}

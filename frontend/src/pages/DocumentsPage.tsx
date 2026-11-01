@@ -1,10 +1,9 @@
-﻿import { CalendarClock, FileSearch, ListTodo, ShieldCheck } from "lucide-react"
+﻿import { CalendarClock, ListTodo, ShieldCheck } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Panel } from "@/components/shared/Panel"
-import { RecordListPanel, formatDateTime } from "@/components/shared/RecordListPanel"
-import { StatusBadge } from "@/components/shared/StatusBadge"
+import { DocumentList } from "@/features/documents/DocumentList"
 import { PdfUploader } from "@/features/documents/PdfUploader"
-import { useDocuments, useUploadDocument } from "@/hooks/useRecords"
+import { useUploadDocument } from "@/hooks/useRecords"
 import { DEMO_MODE } from "@/lib/demoData"
 
 const extracted = [
@@ -20,7 +19,6 @@ const safeguards = [
 ]
 
 export default function DocumentsPage() {
-  const documentsQuery = useDocuments()
   const uploadDocument = useUploadDocument()
 
   async function upload(file: File) {
@@ -67,26 +65,9 @@ export default function DocumentsPage() {
         </Panel>
       </div>
 
-      <RecordListPanel
-        title="Processed documents"
-        query={documentsQuery}
-        icon={FileSearch}
-        emptyTitle="No documents processed yet"
-        emptyDescription="Uploaded documents and their extracted items will appear here."
-        renderItem={(doc) => (
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-900">{doc.originalFilename}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {doc.pageCount ?? 0} page(s), {(doc.extractedCharCount ?? 0).toLocaleString()} characters,{" "}
-                {formatDateTime(doc.createdAt)}
-              </p>
-              {doc.textPreview && <p className="mt-1 line-clamp-2 text-xs text-slate-400">{doc.textPreview}</p>}
-            </div>
-            <StatusBadge status={doc.status} className="shrink-0" />
-          </div>
-        )}
-      />
+      <Panel title="Processed documents">
+        <DocumentList />
+      </Panel>
     </div>
   )
 }
